@@ -15,6 +15,11 @@ function serializeDbRow(val: unknown): unknown {
   return val;
 }
 
+// estado_143 == "C" (contabilizado) → la solicitud debe pasar a gestionada
+function esContabilizado(estado143: string | null | undefined): boolean {
+  return (estado143 ?? "").trim().toUpperCase() === "C";
+}
+
 function parseFecha(radicado: string, fallback: string): string {
   const ts = radicado.split("_")[1] ?? "";
   if (ts.length >= 6 && !isNaN(Number(ts.slice(0, 6)))) {
@@ -130,9 +135,11 @@ export async function GET(
     const v1 = await prisma.valida1Results.findUnique({
       where: { radicado },
       include: {
-        motorProcess: true,
-        motorData:    true,
-        identity:     true,
+        motorProcess:   true,
+        motorData:      true,
+        identity:       true,
+        envioThomas:    true,
+        creditTracking: { select: { estado143: true } },
       },
     });
 
@@ -140,9 +147,23 @@ export async function GET(
       return NextResponse.json({ ok: false, message: "Solicitud no encontrada." }, { status: 404 });
     }
 
+    // Auto-gestionado: estado_143 == "C" (contabilizado) marca la solicitud
+    // como gestionada por el sistema, una sola vez, si aún no lo estaba.
+    let gestionadoAt = v1.gestionadoAt;
+    let gestionadoBy = v1.gestionadoBy;
+    if (!gestionadoAt && esContabilizado(v1.creditTracking?.estado143)) {
+      gestionadoAt = new Date();
+      gestionadoBy = "sistema";
+      await prisma.valida1Results.update({
+        where: { radicado: v1.radicado },
+        data:  { gestionadoAt, gestionadoBy },
+      });
+    }
+
     const motor = v1.motorProcess ?? null;
     const md    = v1.motorData    ?? null;
     const iv    = v1.identity     ?? null;
+    const et    = v1.envioThomas  ?? null;
 
     const v1Resp    = (v1.responseJson    ?? {}) as Record<string, unknown>;
     const motorResp = (motor?.responseJson ?? {}) as Record<string, unknown>;
@@ -158,8 +179,8 @@ export async function GET(
       score:         extractScore(mdResp),
       decisionTexto: decisionTexto(v1Resp, motorResp),
       sinMotor:      !motor,
-      gestionado:    !!v1.gestionadoAt,
-      gestionadoAt:  v1.gestionadoAt?.toISOString() ?? null,
+      gestionado:    !!gestionadoAt,
+      gestionadoAt:  gestionadoAt?.toISOString() ?? null,
       validaciones:  buildValidaciones(v1Resp, motorResp),
       raw: {
         valida1: {
@@ -170,8 +191,8 @@ export async function GET(
           response_json: v1.responseJson ?? null,
           created_at:    v1.createdAt.toISOString(),
           updated_at:    v1.updatedAt.toISOString(),
-          gestionado_at: v1.gestionadoAt?.toISOString() ?? null,
-          gestionado_by: v1.gestionadoBy ?? null,
+          gestionado_at: gestionadoAt?.toISOString() ?? null,
+          gestionado_by: gestionadoBy ?? null,
         },
         motor_process: motor ? {
           id:            Number(motor.id),
@@ -199,6 +220,15 @@ export async function GET(
           response_json: iv.responseJson ?? null,
           created_at:    iv.createdAt.toISOString(),
           updated_at:    iv.updatedAt.toISOString(),
+        } : null,
+        envio_thomas: et ? {
+          id:            Number(et.id),
+          radicado:      et.radicado,
+          cedula:        et.cedula,
+          request_json:  et.requestJson  ?? null,
+          response_json: et.responseJson ?? null,
+          created_at:    et.createdAt.toISOString(),
+          updated_at:    et.updatedAt.toISOString(),
         } : null,
         credito_decision: null,
       },

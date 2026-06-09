@@ -3,6 +3,11 @@ import { auth } from "../../../../../auth";
 import { prisma } from "@/lib/prisma";
 
 
+// estado_143 == "C" (contabilizado) → la solicitud debe pasar a gestionada
+function esContabilizado(estado143: string | null | undefined): boolean {
+  return (estado143 ?? "").trim().toUpperCase() === "C";
+}
+
 function parseFecha(radicado: string, fallback: string): string {
   const ts = radicado.split("_")[1] ?? "";
   if (ts.length >= 6 && !isNaN(Number(ts.slice(0, 6)))) {
@@ -124,10 +129,26 @@ export async function GET(req: NextRequest) {
         gestionadoAt: true,
         motorProcess: { select: { responseJson: true } },
         motorData:    { select: { responseJson: true } },
+        creditTracking: { select: { estado143: true } },
       },
       orderBy: { createdAt: "desc" },
       take: limit,
     });
+
+    // Auto-gestionado: estado_143 == "C" (contabilizado) marca la solicitud
+    // como gestionada por el sistema, una sola vez, si aún no lo estaba.
+    const autoGestionar = v1Rows
+      .filter((v1) => !v1.gestionadoAt && esContabilizado(v1.creditTracking?.estado143))
+      .map((v1) => v1.radicado);
+
+    const autoGestionadoAt = new Date();
+    if (autoGestionar.length) {
+      await prisma.valida1Results.updateMany({
+        where: { radicado: { in: autoGestionar } },
+        data:  { gestionadoAt: autoGestionadoAt, gestionadoBy: "sistema" },
+      });
+    }
+    const autoSet = new Set(autoGestionar);
 
     type V1Row = (typeof v1Rows)[number];
     const data = v1Rows.map((v1: V1Row) => {
@@ -137,6 +158,8 @@ export async function GET(req: NextRequest) {
       const v1Resp    = (v1.responseJson    ?? {}) as Record<string, unknown>;
       const motorResp = (motor?.responseJson ?? {}) as Record<string, unknown>;
       const mdResp    = (md?.responseJson    ?? {}) as Record<string, unknown>;
+
+      const gestionadoAt = v1.gestionadoAt ?? (autoSet.has(v1.radicado) ? autoGestionadoAt : null);
 
       return {
         radicado:      v1.radicado,
@@ -148,8 +171,8 @@ export async function GET(req: NextRequest) {
         score:         extractScore(mdResp),
         decisionTexto: decisionTexto(v1Resp, motorResp),
         sinMotor:      !motor,
-        gestionado:    !!v1.gestionadoAt,
-        gestionadoAt:  v1.gestionadoAt?.toISOString() ?? null,
+        gestionado:    !!gestionadoAt,
+        gestionadoAt:  gestionadoAt?.toISOString() ?? null,
         validaciones:  buildValidaciones(v1Resp, motorResp),
       };
     });

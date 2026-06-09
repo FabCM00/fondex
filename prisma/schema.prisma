@@ -21,10 +21,49 @@ model Valida1Results {
   motorProcess  MotorProcessResults?
   identity      IdentityResults?
   workflow      WorkflowResults?
+  envioThomas   EnvioThomasResults?
+  creditTracking CreditTracking?
 
   @@index([cedula], map: "idx_valida1_cedula")
   @@index([updatedAt(sort: Desc)], map: "idx_valida1_updated")
   @@map("valida1_results")
+}
+
+model EnvioThomasResults {
+  id           BigInt         @id @default(autoincrement())
+  radicado     String         @unique
+  cedula       String
+  requestJson  Json?          @map("request_json")
+  responseJson Json?          @map("response_json")
+  createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  valida1      Valida1Results @relation(fields: [radicado], references: [radicado], onUpdate: Cascade, onDelete: Restrict, map: "fk_envio_thomas_radicado")
+
+  @@index([cedula], map: "idx_envio_thomas_cedula")
+  @@index([updatedAt(sort: Desc)], map: "idx_envio_thomas_updated")
+  @@map("envio_thomas_results")
+}
+
+model CreditTracking {
+  radicado         String         @id
+  cedula           String
+  nombreCliente    String?        @map("nombre_cliente")
+  emailCliente     String?        @map("email_cliente")
+  numeroFlujo      BigInt?        @map("numero_flujo")
+  estado135        String?        @map("estado_135")
+  referencia       String?
+  numeroSolicitud  String?        @map("numero_solicitud")
+  estado143        String?        @map("estado_143")
+  estadoAprobacion String?        @map("estado_aprobacion")
+  completado       Boolean?
+  datos135         Json?          @map("datos_135")
+  datos143         Json?          @map("datos_143")
+  updatedAt        DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  valida1          Valida1Results @relation(fields: [radicado], references: [radicado], onUpdate: Cascade, onDelete: Restrict, map: "fk_credit_tracking_radicado")
+
+  @@index([cedula], map: "idx_credit_tracking_cedula")
+  @@index([updatedAt(sort: Desc)], map: "idx_credit_tracking_updated")
+  @@map("credit_tracking")
 }
 
 model MotorDataResults {

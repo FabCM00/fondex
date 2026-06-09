@@ -1,15 +1,22 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { bandeja } from "@/lib/bandeja";
 import type { SolicitudUI, SolicitudEstado } from "@/lib/bandeja";
 import { useAuth } from "@/contexts/AuthContext";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, RefreshCw, Download, Inbox, Maximize2, ChevronDown, PanelLeftClose, PanelLeft } from "lucide-react";
+import { Search, RefreshCw, Download, Inbox, Maximize2, PanelLeftClose, PanelLeft, SlidersHorizontal, MoreVertical, CheckCircle2, X } from "lucide-react";
+import {
+    DropdownMenu,
+    DropdownMenuTrigger,
+    DropdownMenuContent,
+    DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 import { RequestDetail } from "./RequestDetail";
 import { RequestDetailModal } from "./RequestDetailModal";
 import { ModalTabs, type DetailModalTab } from "./ModalHeader";
+import { BandejaFiltros, FILTROS, type FiltroTab } from "./BandejaFiltros";
 
 type Mode = "admin" | "user";
 
@@ -17,18 +24,6 @@ interface BandejaViewProps {
     mode: Mode;
     cedulaFilter?: string;
 }
-
-type FiltroTab = "todos" | SolicitudEstado;
-
-const FILTROS: { id: FiltroTab; label: string }[] = [
-    { id: "todos", label: "Todos" },
-    { id: "aprobado", label: "Aprobado" },
-    { id: "preaprobado", label: "Preaprobado" },
-    { id: "en_revision", label: "En revisión" },
-    { id: "pendiente", label: "Pendiente" },
-    { id: "rechazado", label: "Rechazado" },
-    { id: "no_viable", label: "No viable" },
-];
 
 const ESTADO_LABEL: Record<SolicitudEstado, string> = {
     aprobado: "Aprobado",
@@ -46,6 +41,15 @@ const ESTADO_DOT: Record<SolicitudEstado, string> = {
     pendiente: "bg-gray-400",
     rechazado: "bg-red-500",
     no_viable: "bg-orange-500",
+};
+
+const ESTADO_BADGE: Record<SolicitudEstado, string> = {
+    aprobado: "bg-green-50 text-green-700 border-green-200",
+    preaprobado: "bg-blue-50 text-blue-700 border-blue-200",
+    en_revision: "bg-amber-50 text-amber-700 border-amber-200",
+    pendiente: "bg-gray-100 text-gray-600 border-gray-200",
+    rechazado: "bg-red-50 text-red-700 border-red-200",
+    no_viable: "bg-orange-50 text-orange-700 border-orange-200",
 };
 
 const PAGE_SIZE = 20;
@@ -74,17 +78,6 @@ export function BandejaView({ mode, cedulaFilter }: BandejaViewProps) {
     const [showList, setShowList] = useState(true);
     const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
     const [autoRefreshSecs, setAutoRefreshSecs] = useState(30);
-    const filtroRef = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        if (!filtroOpen) return;
-        const handler = (e: MouseEvent) => {
-            if (filtroRef.current && !filtroRef.current.contains(e.target as Node))
-                setFiltroOpen(false);
-        };
-        document.addEventListener("mousedown", handler);
-        return () => document.removeEventListener("mousedown", handler);
-    }, [filtroOpen]);
 
     useEffect(() => {
         const t = setTimeout(() => setQuery(rawQuery), 250);
@@ -132,6 +125,10 @@ export function BandejaView({ mode, cedulaFilter }: BandejaViewProps) {
     }, [selectedRadicado]);
 
     const handleRefresh = async () => { setRefreshing(true); await fetchData(); setRefreshing(false); };
+
+    // Nº de filtros activos (solo Estado): "todos" no cuenta como filtro
+    const filtrosActivos = filtro !== "todos" ? 1 : 0;
+    const handleLimpiarFiltros = () => setFiltro("todos");
 
     const handleGestionar = (radicado: string) => setConfirmRadicado(radicado);
 
@@ -230,31 +227,38 @@ export function BandejaView({ mode, cedulaFilter }: BandejaViewProps) {
                     {seleccionada && !seleccionada.gestionado && (
                         <Button
                             onClick={() => handleGestionar(seleccionada.radicado)}
-                            className="rounded-none bg-[#012340] hover:bg-[#012340]/90 text-white h-8 px-3 text-[11px] font-semibold tracking-wide"
+                            className="rounded-md bg-[#012340] hover:bg-[#012340]/90 text-white h-7 px-2.5 text-[10px] font-semibold tracking-wide"
                         >
+                            <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
                             Marcar como Gestionado
                         </Button>
                     )}
-                    <Button variant="outline" onClick={handleExportCSV}
-                        className="rounded-none border-[#0D0D0D]/15 h-8 px-3 text-[11px] font-semibold tracking-wide hover:bg-[#012340] hover:text-white hover:border-[#012340]">
-                        <Download className="mr-1.5 h-3.5 w-3.5" /> CSV
-                    </Button>
-                    <div className="flex items-center gap-1.5">
-                        {lastUpdated && !refreshing && (
-                            <span className="text-[10px] text-[#0D0D0D]/35 font-medium tabular-nums hidden sm:inline">
-                                {lastUpdated.toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
-                                {" · "}
-                                <span className={autoRefreshSecs <= 5 ? "text-[#F29A2E] font-bold" : ""}>
-                                    {autoRefreshSecs}s
-                                </span>
-                            </span>
-                        )}
-                        <Button onClick={handleRefresh} disabled={refreshing}
-                            className="rounded-none bg-[#012340] hover:bg-[#012340]/90 text-white h-8 px-3 text-[11px] font-semibold tracking-wide">
-                            <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
-                            Actualizar
-                        </Button>
-                    </div>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <button
+                                className="h-7 w-7 inline-flex items-center justify-center rounded-md text-[#0D0D0D]/45 hover:text-[#012340] hover:bg-[#0D0D0D]/5 data-[state=open]:bg-[#012340] data-[state=open]:text-white transition-colors"
+                                title="Más acciones"
+                            >
+                                <MoreVertical className="h-4 w-4" />
+                            </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent
+                            align="end"
+                            className="rounded-md min-w-[170px] data-[state=open]:slide-in-from-top-1"
+                        >
+                            {seleccionada && (
+                                <DropdownMenuItem onClick={() => setModalOpen(true)} className="text-[11px] font-semibold cursor-pointer">
+                                    <Maximize2 className="h-3.5 w-3.5" /> Expandir
+                                </DropdownMenuItem>
+                            )}
+                            <DropdownMenuItem onClick={handleRefresh} disabled={refreshing} className="text-[11px] font-semibold cursor-pointer">
+                                <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} /> Actualizar
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={handleExportCSV} className="text-[11px] font-semibold cursor-pointer">
+                                <Download className="h-3.5 w-3.5" /> Exportar CSV
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                 </div>
             </div>
 
@@ -297,67 +301,74 @@ export function BandejaView({ mode, cedulaFilter }: BandejaViewProps) {
                             <ModalTabs active={activeTab} onChange={setActiveTab} />
                         )}
                     </div>
-                    {seleccionada ? (
-                        <button
-                            onClick={() => setModalOpen(true)}
-                            title="Ver en pantalla completa"
-                            className="flex items-center gap-1.5 px-3 py-2 text-[11px] font-semibold text-[#0D0D0D]/35 hover:text-[#012340] transition-colors flex-shrink-0"
-                        >
-                            <Maximize2 className="h-3 w-3" />
-                            Expandir
-                        </button>
-                    ) : null}
                 </div>
             </div>
 
             {/* ── Two-panel body ── */}
             <div className="flex flex-1 min-h-0 overflow-hidden bg-white">
-                {/* ── Left: search + filters + list ── */}
+                {/* ── Panel de filtros empotrado (empuja la lista) ── */}
+                {showList && (
+                    <BandejaFiltros
+                        open={filtroOpen}
+                        filtro={filtro}
+                        conteoPorEstado={conteoPorEstado}
+                        filtrosActivos={filtrosActivos}
+                        onFiltroChange={setFiltro}
+                        onLimpiar={handleLimpiarFiltros}
+                        onClose={() => setFiltroOpen(false)}
+                    />
+                )}
+
+                {/* ── Left: search + list ── */}
                 {showList && (
                     <div className="w-[340px] flex-shrink-0 flex flex-col border-r border-[#0D0D0D]/10 bg-white overflow-hidden transition-all">
-                    <div className="flex-shrink-0 px-3 py-2.5 border-b border-[#0D0D0D]/8">
-                        <div className="relative">
-                            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#0D0D0D]/30" />
-                            <Input
-                                placeholder="Buscar solicitudes…"
-                                value={rawQuery}
-                                onChange={(e) => setRawQuery(e.target.value)}
-                                className="rounded-none border-[#0D0D0D]/12 pl-8 h-8 text-xs focus-visible:ring-0 focus-visible:border-[#012340]/40 bg-[#0D0D0D]/[0.02]"
-                            />
+                    <div className="flex-shrink-0 px-3 py-2.5 border-b border-[#0D0D0D]/8 space-y-2">
+                        <div className="flex items-center gap-2">
+                            <div className="relative flex-1">
+                                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#0D0D0D]/30" />
+                                <Input
+                                    placeholder="Buscar solicitudes…"
+                                    value={rawQuery}
+                                    onChange={(e) => setRawQuery(e.target.value)}
+                                    className="rounded-none border-[#0D0D0D]/12 pl-8 h-8 text-xs focus-visible:ring-0 focus-visible:border-[#012340]/40 bg-[#0D0D0D]/[0.02]"
+                                />
+                            </div>
+                            <button
+                                onClick={() => setFiltroOpen((o) => !o)}
+                                title="Filtros"
+                                className={`relative h-8 w-8 flex-shrink-0 inline-flex items-center justify-center border transition-colors ${filtroOpen || filtrosActivos > 0
+                                    ? "border-[#012340] bg-[#012340] text-white"
+                                    : "border-[#0D0D0D]/12 text-[#0D0D0D]/55 hover:border-[#012340]/40 hover:text-[#012340]"
+                                    }`}
+                            >
+                                <SlidersHorizontal className="h-3.5 w-3.5" />
+                                {filtrosActivos > 0 && (
+                                    <span className="absolute -top-1.5 -right-1.5 h-3.5 min-w-3.5 px-0.5 flex items-center justify-center rounded-full bg-[#F29A2E] text-white text-[9px] font-bold leading-none">
+                                        {filtrosActivos}
+                                    </span>
+                                )}
+                            </button>
                         </div>
-                    </div>
 
-                    <div ref={filtroRef} className="flex-shrink-0 px-3 py-2 border-b border-[#0D0D0D]/8 relative">
-                        <button
-                            onClick={() => setFiltroOpen((o) => !o)}
-                            className="flex items-center gap-2 h-7 px-3 w-full border border-[#0D0D0D]/12 bg-white text-[11px] font-semibold text-[#0D0D0D]/70 hover:border-[#012340]/40 transition-colors"
-                        >
-                            <span className="flex-1 text-left">
-                                {FILTROS.find((f) => f.id === filtro)?.label ?? "Todos"}
-                                <span className="ml-1.5 text-[10px] font-bold text-[#0D0D0D]/40">
-                                    {conteoPorEstado.get(filtro) ?? 0}
-                                </span>
-                            </span>
-                            <ChevronDown className={`h-3.5 w-3.5 text-[#0D0D0D]/35 transition-transform ${filtroOpen ? "rotate-180" : ""}`} />
-                        </button>
-
-                        {filtroOpen && (
-                            <div className="absolute left-3 right-3 top-full mt-0.5 z-20 bg-white border border-[#0D0D0D]/12 shadow-lg">
-                                {FILTROS.map((f) => (
+                        {/* Chips de filtros activos */}
+                        {filtrosActivos > 0 && (
+                            <div className="flex items-center flex-wrap gap-1.5">
+                                <span className="inline-flex items-center gap-1 h-5 pl-2 pr-1 bg-[#012340]/[0.06] border border-[#012340]/15 text-[10px] font-semibold text-[#012340]">
+                                    {FILTROS.find((f) => f.id === filtro)?.label}
                                     <button
-                                        key={f.id}
-                                        onClick={() => { setFiltro(f.id); setFiltroOpen(false); }}
-                                        className={`w-full flex items-center justify-between px-3 py-2 text-[11px] font-semibold transition-colors ${filtro === f.id
-                                            ? "bg-[#012340] text-white"
-                                            : "text-[#0D0D0D]/65 hover:bg-[#0D0D0D]/[0.04]"
-                                            }`}
+                                        onClick={handleLimpiarFiltros}
+                                        className="inline-flex items-center justify-center h-3.5 w-3.5 rounded-full hover:bg-[#012340]/15 transition-colors"
+                                        title="Quitar filtro"
                                     >
-                                        {f.label}
-                                        <span className={`text-[10px] font-bold ${filtro === f.id ? "opacity-70" : "opacity-40"}`}>
-                                            {conteoPorEstado.get(f.id) ?? 0}
-                                        </span>
+                                        <X className="h-2.5 w-2.5" />
                                     </button>
-                                ))}
+                                </span>
+                                <button
+                                    onClick={handleLimpiarFiltros}
+                                    className="text-[10px] font-semibold text-[#0D0D0D]/45 hover:text-[#012340] transition-colors"
+                                >
+                                    Limpiar
+                                </button>
                             </div>
                         )}
                     </div>
@@ -418,7 +429,7 @@ export function BandejaView({ mode, cedulaFilter }: BandejaViewProps) {
                                             <span className="text-[11px] text-[#0D0D0D]/45 truncate">
                                                 CC {s.cedula} · {formatCurrency(s.valor)}
                                             </span>
-                                            <span className={`text-[10px] font-semibold flex-shrink-0 ${selected ? "text-[#012340]" : "text-[#0D0D0D]/35"}`}>
+                                            <span className={`flex-shrink-0 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide border ${ESTADO_BADGE[s.estado]}`}>
                                                 {ESTADO_LABEL[s.estado]}
                                             </span>
                                         </div>
