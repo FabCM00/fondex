@@ -50,11 +50,6 @@
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/chunks/app/api/usuario/bandeja/[radicado]/route.js"
-    ],
-    "/(protected)/usuario/perfil/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/(protected)/usuario/perfil/page.js"
     ]
   }
 }

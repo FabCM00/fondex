@@ -65,6 +65,14 @@ export interface RawEnvioThomasRow {
   [key: string]: Json;
 }
 
+export interface RawWorkflowRow {
+  radicado: string;
+  cedula: string;
+  request_json:  Json;
+  response_json: Json;
+  [key: string]: Json;
+}
+
 export interface RawCreditTrackingRow {
   radicado: string;
   cedula: string;
@@ -103,6 +111,7 @@ export interface SolicitudUI {
     motor_data:       RawMotorDataRow       | null;
     identity:         RawIdentityRow        | null;
     envio_thomas:     RawEnvioThomasRow     | null;
+    workflow:         RawWorkflowRow        | null;
     credit_tracking:  RawCreditTrackingRow  | null;
     credito_decision: null;
   };

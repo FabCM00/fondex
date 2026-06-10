@@ -193,6 +193,7 @@ export async function GET(
         motorData:      true,
         identity:       true,
         envioThomas:    true,
+        workflow:       true,
         creditTracking: true,
       },
     });
@@ -218,6 +219,7 @@ export async function GET(
     const md    = v1.motorData    ?? null;
     const iv    = v1.identity     ?? null;
     const et    = v1.envioThomas  ?? null;
+    const wf    = v1.workflow      ?? null;
 
     const v1Resp    = (v1.responseJson    ?? {}) as Record<string, unknown>;
     const motorResp = motor ? ((motor.responseJson ?? {}) as Record<string, unknown>) : null;
@@ -284,6 +286,15 @@ export async function GET(
           response_json: et.responseJson ?? null,
           created_at:    et.createdAt.toISOString(),
           updated_at:    et.updatedAt.toISOString(),
+        } : null,
+        workflow: wf ? {
+          id:            Number(wf.id),
+          radicado:      wf.radicado,
+          cedula:        wf.cedula,
+          request_json:  wf.requestJson  ?? null,
+          response_json: wf.responseJson ?? null,
+          created_at:    wf.createdAt.toISOString(),
+          updated_at:    wf.updatedAt.toISOString(),
         } : null,
         credit_tracking: v1.creditTracking
           ? (serializeDbRow(v1.creditTracking) as Record<string, unknown>)

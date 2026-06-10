@@ -15,6 +15,7 @@ import {
   ChevronDown,
   Send,
   History,
+  Workflow,
 } from "lucide-react";
 import {
   Popover,
@@ -566,6 +567,7 @@ type MotorJsonPanel =
   | "motor_data"
   | "motor_process"
   | "identity"
+  | "workflow"
   | "envio_thomas"
   | "tracking";
 
@@ -597,6 +599,12 @@ const MOTOR_JSON_PANELS: {
     id: "identity",
     shortLabel: "Identidad",
     icon: <FileJson className="h-3.5 w-3.5" />,
+    hasReqRes: true,
+  },
+  {
+    id: "workflow",
+    shortLabel: "Workflow",
+    icon: <Workflow className="h-3.5 w-3.5" />,
     hasReqRes: true,
   },
   {
@@ -648,6 +656,10 @@ export function MotorJsonView({
         return side === "req"
           ? (solicitud.raw.identity?.request_json ?? null)
           : (solicitud.raw.identity?.response_json ?? null);
+      case "workflow":
+        return side === "req"
+          ? (solicitud.raw.workflow?.request_json ?? null)
+          : (solicitud.raw.workflow?.response_json ?? null);
       case "envio_thomas":
         return side === "req"
           ? (solicitud.raw.envio_thomas?.request_json ?? null)
