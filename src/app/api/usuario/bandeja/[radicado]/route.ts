@@ -46,22 +46,74 @@ function extractMonto(mdResp: Record<string, unknown>, motorResp: Record<string,
   return 0;
 }
 
-function deriveEstado(v1Resp: Record<string, unknown>, motorResp: Record<string, unknown>): string {
-  // Normaliza "NoViable" / "No Viable" / "NO VIABLE" → elimina espacios para comparar
-  const motor2raw = (motorResp?.motor2 as string) ?? "";
-  const motor2 = motor2raw.toUpperCase().replace(/\s+/g, "").trim();
-  if (motor2 === "VIABLE") return "aprobado";
-  if (motor2 === "NOVIABLE") return "no_viable";
+// motor2 puede venir numérico (1=viable, 2=no viable) o texto legado ("Viable"/"No Viable").
+// Normaliza a 1 | 2 | null.
+function normMotor2(rawMotor2: unknown): 1 | 2 | null {
+  if (rawMotor2 === 1) return 1;
+  if (rawMotor2 === 2) return 2;
+  const txt = String(rawMotor2 ?? "").toUpperCase().replace(/\s+/g, "").trim();
+  if (txt === "VIABLE") return 1;
+  if (txt === "NOVIABLE") return 2;
+  return null;
+}
 
-  const proc = (motorResp?.processing ?? {}) as Record<string, unknown>;
-  if (proc?.viabilidadDef === 1) return "aprobado";
-  if (proc?.viabilidadDef === 0) return "no_viable";
-  if (motor2) return "en_revision";
-
+// Estado de la solicitud según las 10 reglas de negocio (orden de prioridad).
+// Se evalúa la primera regla que se cumpla; el resultado es solo de frontend.
+//   identityResp / motorDataExists indican la existencia de las filas relacionadas
+//   (equivalen a `identity_results.radicado === null` / `motor_data.radicado === null`).
+function deriveEstado(
+  v1Resp: Record<string, unknown>,
+  motorResp: Record<string, unknown> | null,
+  identityResp: Record<string, unknown> | null,
+  motorDataExists: boolean,
+  estado143: string | null | undefined,
+): string {
   const motor1 = v1Resp?.motor1;
-  if (motor1 === 2) return "rechazado";
-  if (motor1 === 1) return "en_revision";
-  return "pendiente";
+  const hayIdentity = identityResp !== null;
+
+  // ── Reglas 1-2: antes de validación de identidad ──
+  if (!hayIdentity) {
+    return motor1 === 1 ? "valida_1" : "no_valida_1";
+  }
+
+  // ── Reglas 3-4: validación de identidad, antes de motor_data ──
+  if (!motorDataExists) {
+    const statusFace = identityResp?.status_face;
+    const statusDoc = identityResp?.status_document;
+    const tipo = identityResp?.tipo_validacion;
+
+    // 3: Val Identidad
+    if (
+      statusFace === 1 &&
+      ((tipo === 1 && statusDoc === 1) || tipo === 2)
+    ) {
+      return "val_identidad";
+    }
+    // 4: No Val Identidad
+    if (statusDoc === 2 || statusFace === 2) {
+      return "no_val_identidad";
+    }
+  }
+
+  // ── Reglas 5-9: flujo post-motor ──
+  const status = String(motorResp?.status ?? "").trim().toLowerCase();
+  // 5: Fallo en servicios — motor_process existe pero status !== "ok"
+  if (motorResp !== null && status !== "ok") return "fallo_servicios";
+
+  const motor2 = normMotor2(motorResp?.motor2);
+  // 6: No viable
+  if (motor2 === 2) return "no_viable";
+
+  // 7-9: motor2 viable + estado del crédito (estado_143)
+  if (motor2 === 1) {
+    const tracking = (estado143 ?? "").trim().toUpperCase();
+    if (tracking === "E") return "preaprobado";
+    if (tracking === "A") return "aprobado";
+    if (tracking === "C") return "contabilizado";
+  }
+
+  // 10: Revisión — fallback
+  return "revision";
 }
 
 function extractScore(mdResp: Record<string, unknown>): number | null {
@@ -73,8 +125,10 @@ function extractScore(mdResp: Record<string, unknown>): number | null {
 }
 
 function decisionTexto(v1Resp: Record<string, unknown>, motorResp: Record<string, unknown>): string {
-  const motor2 = motorResp?.motor2 as string | undefined;
-  if (motor2) return motor2;
+  const rawMotor2 = motorResp?.motor2;
+  if (rawMotor2 === 1) return "Viable";
+  if (rawMotor2 === 2) return "No viable";
+  if (typeof rawMotor2 === "string" && rawMotor2.trim()) return rawMotor2;
   const status = motorResp?.status as string | undefined;
   if (status) return status;
   const motor1 = v1Resp?.motor1;
@@ -139,7 +193,7 @@ export async function GET(
         motorData:      true,
         identity:       true,
         envioThomas:    true,
-        creditTracking: { select: { estado143: true } },
+        creditTracking: true,
       },
     });
 
@@ -166,22 +220,23 @@ export async function GET(
     const et    = v1.envioThomas  ?? null;
 
     const v1Resp    = (v1.responseJson    ?? {}) as Record<string, unknown>;
-    const motorResp = (motor?.responseJson ?? {}) as Record<string, unknown>;
+    const motorResp = motor ? ((motor.responseJson ?? {}) as Record<string, unknown>) : null;
     const mdResp    = (md?.responseJson    ?? {}) as Record<string, unknown>;
+    const ivResp    = iv ? ((iv.responseJson ?? {}) as Record<string, unknown>) : null;
 
     const data = {
       radicado:      v1.radicado,
       cedula:        v1.cedula,
       solicitante:   buildSolicitante(v1Resp, mdResp),
       fecha:         parseFecha(v1.radicado, v1.createdAt.toISOString()),
-      valor:         extractMonto(mdResp, motorResp),
-      estado:        deriveEstado(v1Resp, motorResp),
+      valor:         extractMonto(mdResp, motorResp ?? {}),
+      estado:        deriveEstado(v1Resp, motorResp, ivResp, md !== null, v1.creditTracking?.estado143),
       score:         extractScore(mdResp),
-      decisionTexto: decisionTexto(v1Resp, motorResp),
+      decisionTexto: decisionTexto(v1Resp, motorResp ?? {}),
       sinMotor:      !motor,
       gestionado:    !!gestionadoAt,
       gestionadoAt:  gestionadoAt?.toISOString() ?? null,
-      validaciones:  buildValidaciones(v1Resp, motorResp),
+      validaciones:  buildValidaciones(v1Resp, motorResp ?? {}),
       raw: {
         valida1: {
           id:            Number(v1.id),
@@ -230,6 +285,9 @@ export async function GET(
           created_at:    et.createdAt.toISOString(),
           updated_at:    et.updatedAt.toISOString(),
         } : null,
+        credit_tracking: v1.creditTracking
+          ? (serializeDbRow(v1.creditTracking) as Record<string, unknown>)
+          : null,
         credito_decision: null,
       },
     };

@@ -26,30 +26,42 @@ interface BandejaViewProps {
 }
 
 const ESTADO_LABEL: Record<SolicitudEstado, string> = {
-    aprobado: "Aprobado",
-    preaprobado: "Preaprobado",
-    en_revision: "En revisión",
-    pendiente: "Pendiente",
-    rechazado: "Rechazado",
+    valida_1: "Valida 1",
+    no_valida_1: "No valida 1",
+    val_identidad: "Val. identidad",
+    no_val_identidad: "No val. identidad",
+    fallo_servicios: "Fallo en servicios",
     no_viable: "No viable",
+    preaprobado: "Preaprobado",
+    aprobado: "Aprobado",
+    contabilizado: "Contabilizado",
+    revision: "Revisión",
 };
 
 const ESTADO_DOT: Record<SolicitudEstado, string> = {
-    aprobado: "bg-green-500",
-    preaprobado: "bg-blue-500",
-    en_revision: "bg-amber-500",
-    pendiente: "bg-gray-400",
-    rechazado: "bg-red-500",
+    valida_1: "bg-cyan-500",
+    no_valida_1: "bg-red-500",
+    val_identidad: "bg-sky-500",
+    no_val_identidad: "bg-red-500",
+    fallo_servicios: "bg-purple-500",
     no_viable: "bg-orange-500",
+    preaprobado: "bg-blue-500",
+    aprobado: "bg-green-500",
+    contabilizado: "bg-emerald-600",
+    revision: "bg-amber-500",
 };
 
 const ESTADO_BADGE: Record<SolicitudEstado, string> = {
-    aprobado: "bg-green-50 text-green-700 border-green-200",
-    preaprobado: "bg-blue-50 text-blue-700 border-blue-200",
-    en_revision: "bg-amber-50 text-amber-700 border-amber-200",
-    pendiente: "bg-gray-100 text-gray-600 border-gray-200",
-    rechazado: "bg-red-50 text-red-700 border-red-200",
+    valida_1: "bg-cyan-50 text-cyan-700 border-cyan-200",
+    no_valida_1: "bg-red-50 text-red-700 border-red-200",
+    val_identidad: "bg-sky-50 text-sky-700 border-sky-200",
+    no_val_identidad: "bg-red-50 text-red-700 border-red-200",
+    fallo_servicios: "bg-purple-50 text-purple-700 border-purple-200",
     no_viable: "bg-orange-50 text-orange-700 border-orange-200",
+    preaprobado: "bg-blue-50 text-blue-700 border-blue-200",
+    aprobado: "bg-green-50 text-green-700 border-green-200",
+    contabilizado: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    revision: "bg-amber-50 text-amber-700 border-amber-200",
 };
 
 const PAGE_SIZE = 20;

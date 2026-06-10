@@ -8,12 +8,16 @@ export type FiltroTab = "todos" | SolicitudEstado;
 
 export const FILTROS: { id: FiltroTab; label: string }[] = [
   { id: "todos", label: "Todos" },
-  { id: "aprobado", label: "Aprobado" },
-  { id: "preaprobado", label: "Preaprobado" },
-  { id: "en_revision", label: "En revisión" },
-  { id: "pendiente", label: "Pendiente" },
-  { id: "rechazado", label: "Rechazado" },
+  { id: "valida_1", label: "Valida 1" },
+  { id: "no_valida_1", label: "No valida 1" },
+  { id: "val_identidad", label: "Val. identidad" },
+  { id: "no_val_identidad", label: "No val. identidad" },
+  { id: "fallo_servicios", label: "Fallo en servicios" },
   { id: "no_viable", label: "No viable" },
+  { id: "preaprobado", label: "Preaprobado" },
+  { id: "aprobado", label: "Aprobado" },
+  { id: "contabilizado", label: "Contabilizado" },
+  { id: "revision", label: "Revisión" },
 ];
 
 interface BandejaFiltrosProps {

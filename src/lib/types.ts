@@ -1,10 +1,16 @@
+// Estados derivados en frontend según las 10 reglas de negocio (orden de prioridad).
+// Ver deriveEstado() en los endpoints de bandeja.
 export type SolicitudEstado =
-  | "aprobado"
-  | "preaprobado"
-  | "en_revision"
-  | "pendiente"
-  | "rechazado"
-  | "no_viable";
+  | "valida_1"          // 1: motor1 === 1 && sin identity_results
+  | "no_valida_1"       // 2: motor1 !== 1 && sin identity_results
+  | "val_identidad"     // 3: identidad OK && sin motor_data
+  | "no_val_identidad"  // 4: identidad rechazada && sin motor_data
+  | "fallo_servicios"   // 5: motor_process.status !== "ok"
+  | "no_viable"         // 6: motor2 === 2
+  | "preaprobado"       // 7: motor2 === 1 && estado_143 === "E"
+  | "aprobado"          // 8: motor2 === 1 && estado_143 === "A"
+  | "contabilizado"     // 9: motor2 === 1 && estado_143 === "C"
+  | "revision";         // 10: cualquier otro caso
 
 export interface ValidacionItem {
   label: string;
@@ -59,6 +65,24 @@ export interface RawEnvioThomasRow {
   [key: string]: Json;
 }
 
+export interface RawCreditTrackingRow {
+  radicado: string;
+  cedula: string;
+  nombreCliente?: string | null;
+  emailCliente?: string | null;
+  numeroFlujo?: number | null;
+  estado135?: string | null;
+  referencia?: string | null;
+  numeroSolicitud?: string | null;
+  estado143?: string | null;
+  estadoAprobacion?: string | null;
+  completado?: boolean | null;
+  datos135?: Json;
+  datos143?: Json;
+  updatedAt?: string | null;
+  [key: string]: Json;
+}
+
 
 export interface SolicitudUI {
   radicado: string;
@@ -75,10 +99,11 @@ export interface SolicitudUI {
   validaciones: ValidacionItem[];
   raw?: {
     valida1:          RawValida1Row;
-    motor_process:    RawMotorProcessRow | null;
-    motor_data:       RawMotorDataRow    | null;
-    identity:         RawIdentityRow     | null;
-    envio_thomas:     RawEnvioThomasRow  | null;
+    motor_process:    RawMotorProcessRow    | null;
+    motor_data:       RawMotorDataRow       | null;
+    identity:         RawIdentityRow        | null;
+    envio_thomas:     RawEnvioThomasRow     | null;
+    credit_tracking:  RawCreditTrackingRow  | null;
     credito_decision: null;
   };
 }

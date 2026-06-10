@@ -12,9 +12,9 @@ import {
   Cpu,
   ShieldCheck,
   FileJson,
-  ClipboardList,
   ChevronDown,
   Send,
+  History,
 } from "lucide-react";
 import {
   Popover,
@@ -567,7 +567,7 @@ type MotorJsonPanel =
   | "motor_process"
   | "identity"
   | "envio_thomas"
-  | "auditoria";
+  | "tracking";
 
 const MOTOR_JSON_PANELS: {
   id: MotorJsonPanel;
@@ -606,59 +606,12 @@ const MOTOR_JSON_PANELS: {
     hasReqRes: true,
   },
   {
-    id: "auditoria",
-    shortLabel: "Auditoría",
-    icon: <ClipboardList className="h-3.5 w-3.5" />,
+    id: "tracking",
+    shortLabel: "Tracking",
+    icon: <History className="h-3.5 w-3.5" />,
     hasReqRes: false,
   },
 ];
-
-function buildAuditoriaResumen(
-  solicitud: SolicitudDetail,
-): Record<string, unknown> {
-  const v1 = solicitud.raw.valida1;
-  const mp = solicitud.raw.motor_process;
-  const proc = mp?.response_json?.processing;
-  return {
-    meta: {
-      generado_en: new Date().toISOString(),
-      radicado: solicitud.radicado,
-      cedula: solicitud.cedula,
-      solicitante: solicitud.solicitante,
-      fecha_solicitud: solicitud.fecha,
-    },
-    decision: {
-      estado: solicitud.estado,
-      decision_texto: solicitud.decisionTexto,
-      motor2: mp?.response_json?.motor2 ?? null,
-      sin_motor: solicitud.sinMotor,
-      score_tu: solicitud.score,
-    },
-    oferta: mp?.response_json?.oferta ?? null,
-    validaciones_iniciales: {
-      motor1: v1.response_json?.motor1 ?? null,
-      valida_id: v1.response_json?.valida_id ?? null,
-      valida_email: v1.response_json?.valida_email ?? null,
-      valida_celular: v1.response_json?.valida_celular ?? null,
-      valida_last_name: v1.response_json?.valida_last_name ?? null,
-      valida_capacidad: v1.response_json?.valida_capacidad ?? null,
-      valida_estado_laboral: v1.response_json?.valida_estado_laboral ?? null,
-      mensaje: v1.response_json?.mensaje ?? null,
-      detalles_rechazo: v1.response_json?.detalles_rechazo ?? [],
-    },
-    motor_processing: proc
-      ? {
-          viabilidadDef: proc.viabilidadDef,
-          viabilidad1: proc.viabilidad1,
-          solvencia: proc.solvencia,
-          capacPagoDisp: proc.capacPagoDisp,
-          egresoTotal: proc.egresoTotal,
-          scoreFondex: proc.scoreFondex,
-          perfilFondex: proc.perfilFondex,
-        }
-      : null,
-  };
-}
 
 type ReqResSide = "req" | "res";
 
@@ -699,8 +652,8 @@ export function MotorJsonView({
         return side === "req"
           ? (solicitud.raw.envio_thomas?.request_json ?? null)
           : (solicitud.raw.envio_thomas?.response_json ?? null);
-      case "auditoria":
-        return buildAuditoriaResumen(solicitud);
+      case "tracking":
+        return solicitud.raw.credit_tracking ?? null;
     }
   };
 
@@ -713,11 +666,10 @@ export function MotorJsonView({
         <div className="flex min-w-max">
           {MOTOR_JSON_PANELS.map((panel) => {
             const isActive = activePanel === panel.id;
-            const isAudit = panel.id === "auditoria";
             const side = getSide(panel.id);
             const hasData = getPanelData(panel.id, side) != null;
 
-            // Tab sin req/res (Auditoría)
+            // Tab sin req/res (Tracking): botón simple, sin popover
             if (!panel.hasReqRes) {
               return (
                 <button
