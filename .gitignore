@@ -70,3 +70,6 @@ supabase/.temp/
 # Misc local config
 *.local.ts
 *.local.js
+
+# AI assistants / Claude config
+.claude/

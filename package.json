@@ -15,8 +15,10 @@
   },
   "dependencies": {
     "@azure/communication-email": "^1.1.0",
+    "@azure/storage-blob": "^12.32.0",
     "@monaco-editor/react": "^4.7.0",
     "@prisma/client": "^6.19.3",
+    "@react-email/components": "^1.0.12",
     "@supabase/auth-helpers-nextjs": "^0.10.0",
     "@supabase/supabase-js": "^2.53.0",
     "@upstash/ratelimit": "^2.0.8",
@@ -31,6 +33,7 @@
     "radix-ui": "^1.4.3",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
+    "react-email": "^6.6.3",
     "resend": "^6.12.4",
     "shadcn": "^4.6.0",
     "tailwind-merge": "^3.5.0",
@@ -38,6 +41,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@react-email/ui": "^6.6.3",
     "@tailwindcss/postcss": "^4",
     "@types/bcryptjs": "^2.4.6",
     "@types/js-yaml": "^4",

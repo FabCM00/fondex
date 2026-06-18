@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "../../../../../auth";
 import { prisma } from "@/lib/prisma";
+import { withPrismaRetry } from "@/lib/prisma-retry";
 
 
 // estado_143 == "C" (contabilizado) → la solicitud debe pasar a gestionada
@@ -174,22 +175,24 @@ export async function GET(req: NextRequest) {
   if (cedulaFilter) where.cedula = cedulaFilter;
 
   try {
-    const v1Rows = await prisma.valida1Results.findMany({
-      where,
-      select: {
-        radicado: true,
-        cedula: true,
-        responseJson: true,
-        createdAt: true,
-        gestionadoAt: true,
-        motorProcess: { select: { responseJson: true } },
-        motorData: { select: { radicado: true, responseJson: true } },
-        identity: { select: { responseJson: true } },
-        creditTracking: { select: { estado143: true } },
-      },
-      orderBy: { createdAt: "desc" },
-      take: limit,
-    });
+    const v1Rows = await withPrismaRetry(() =>
+      prisma.valida1Results.findMany({
+        where,
+        select: {
+          radicado: true,
+          cedula: true,
+          responseJson: true,
+          createdAt: true,
+          gestionadoAt: true,
+          motorProcess: { select: { responseJson: true } },
+          motorData: { select: { radicado: true, responseJson: true } },
+          identity: { select: { responseJson: true } },
+          creditTracking: { select: { estado143: true } },
+        },
+        orderBy: { createdAt: "desc" },
+        take: limit,
+      }),
+    );
 
     // Auto-gestionado: estado_143 == "C" (contabilizado) marca la solicitud
     // como gestionada por el sistema, una sola vez, si aún no lo estaba.
@@ -199,10 +202,12 @@ export async function GET(req: NextRequest) {
 
     const autoGestionadoAt = new Date();
     if (autoGestionar.length) {
-      await prisma.valida1Results.updateMany({
-        where: { radicado: { in: autoGestionar } },
-        data: { gestionadoAt: autoGestionadoAt, gestionadoBy: "sistema" },
-      });
+      await withPrismaRetry(() =>
+        prisma.valida1Results.updateMany({
+          where: { radicado: { in: autoGestionar } },
+          data: { gestionadoAt: autoGestionadoAt, gestionadoBy: "sistema" },
+        }),
+      );
     }
     const autoSet = new Set(autoGestionar);
 
@@ -257,13 +262,15 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ ok: false, message: "Radicado requerido." }, { status: 400 });
     }
 
-    await prisma.valida1Results.update({
-      where: { radicado },
-      data: {
-        gestionadoAt: new Date(),
-        gestionadoBy: session.user.email ?? "unknown",
-      },
-    });
+    await withPrismaRetry(() =>
+      prisma.valida1Results.update({
+        where: { radicado },
+        data: {
+          gestionadoAt: new Date(),
+          gestionadoBy: session.user.email ?? "unknown",
+        },
+      }),
+    );
 
     return NextResponse.json({ ok: true });
   } catch (error: unknown) {

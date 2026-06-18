@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2 } from "lucide-react";
 import { type SolicitudUI, type SolicitudDetail } from "@/lib/bandeja";
+import { LoadingScreen } from "@/components/LoadingScreen";
 import { ModalHeader, ModalTabs, type DetailModalTab } from "./ModalHeader";
 import { MotorJsonView, ResumenSolicitud } from "./DetailContent";
 
@@ -47,10 +47,7 @@ export function RequestDetailModal({
                             {activeTab === "motor_json" && <MotorJsonView    solicitud={detail} hideExpand />}
                         </>
                     ) : (
-                        <div className="flex h-full items-center justify-center gap-2 text-[#0D0D0D]/35">
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                            <span className="text-xs font-medium">Cargando detalle…</span>
-                        </div>
+                        <LoadingScreen message="Cargando detalle…" fullScreen={false} />
                     )}
                 </div>
             </div>

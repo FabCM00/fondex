@@ -33,11 +33,11 @@ export function AuthIllustrationPage({
         />
       </header>
       <div className="flex flex-1 items-center justify-center p-6">
-        <div className="flex w-full max-w-[420px] flex-col items-center gap-6">
+        <div className="flex w-full max-w-[500px] flex-col items-center gap-6">
           <img
             src={imageSrc}
             alt={imageAlt}
-            className="w-full max-w-[320px] select-none"
+            className="w-full max-w-[580px] select-none"
             draggable={false}
           />
           <div className="flex flex-col gap-2 text-center">

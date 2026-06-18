@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { bandeja } from "@/lib/bandeja";
 import type { SolicitudUI, SolicitudEstado } from "@/lib/bandeja";
@@ -7,6 +8,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search, RefreshCw, Download, Inbox, Maximize2, PanelLeftClose, PanelLeft, SlidersHorizontal, MoreVertical, CheckCircle2, X } from "lucide-react";
+import { LoadingScreen } from "@/components/LoadingScreen";
 import {
     DropdownMenu,
     DropdownMenuTrigger,
@@ -385,7 +387,7 @@ export function BandejaView({ mode, cedulaFilter }: BandejaViewProps) {
                         )}
                     </div>
 
-                    <div className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-[#0D0D0D]/10">
+                        <div className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
                         {loading ? (
                             <div className="flex flex-col">
                                 {SKELETON_ROWS.map((i) => (
@@ -481,10 +483,7 @@ export function BandejaView({ mode, cedulaFilter }: BandejaViewProps) {
                 <div className="flex-1 min-w-0 overflow-hidden">
                     {seleccionada ? (
                         detailLoading ? (
-                            <div className="h-full flex flex-col items-center justify-center gap-3 text-[#0D0D0D]/25">
-                                <RefreshCw className="h-6 w-6 animate-spin" />
-                                <p className="text-sm font-medium">Cargando detalle…</p>
-                            </div>
+                            <LoadingScreen message="Cargando detalle…" fullScreen={false} />
                         ) : (
                             <RequestDetail
                                 solicitud={selectedDetail ?? seleccionada}
@@ -493,9 +492,23 @@ export function BandejaView({ mode, cedulaFilter }: BandejaViewProps) {
                             />
                         )
                     ) : (
-                        <div className="h-full flex flex-col items-center justify-center gap-3 text-[#0D0D0D]/25">
-                            <Inbox className="h-10 w-10" />
-                            <p className="text-sm font-medium">Selecciona una solicitud</p>
+                        <div className="flex flex-col items-center justify-center min-h-[320px] h-full px-8 py-10 gap-0">
+                            <Image
+                                src="/bandeja.png"
+                                alt="Selecciona una solicitud"
+                                width={340}
+                                height={340}
+                                className="select-none pointer-events-none"
+                                priority
+                            />
+                            <div className="flex flex-col items-center gap-2 text-center -mt-12">
+                                <p className="text-xl font-normal text-[#0D0D0D]/80 tracking-tight">
+                                    Selecciona una solicitud
+                                </p>
+                                <p className="text-sm text-[#0D0D0D]/50 max-w-[360px] leading-relaxed">
+                                    Elige una solicitud de la lista para ver su detalle, campos y documentos.
+                                </p>
+                            </div>
                         </div>
                     )}
                 </div>
@@ -512,13 +525,24 @@ export function BandejaView({ mode, cedulaFilter }: BandejaViewProps) {
 
             {confirmRadicado && (
                 <div
-                    className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-4"
+                    className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-4 duration-200 animate-in fade-in"
                     onClick={(e) => { if (e.target === e.currentTarget && !gestionando) setConfirmRadicado(null); }}
                 >
-                    <div className="w-full max-w-sm bg-white border border-[#0D0D0D]/15 shadow-2xl">
+                    <div className="w-full max-w-sm border border-l-4 border-[#0D0D0D]/15 border-l-[#012340] bg-white shadow-2xl duration-200 animate-in zoom-in-95">
                         <div className="border-b border-[#0D0D0D]/10 px-5 py-4">
-                            <p className="text-[10px] font-bold tracking-[0.18em] uppercase text-[#0D0D0D]/40">Confirmar acción</p>
-                            <h3 className="mt-1 text-sm font-bold text-[#012340]">Marcar como Gestionado</h3>
+                            <Image
+                                src="/Imagen1.png"
+                                alt="WANT N' Get"
+                                width={140}
+                                height={42}
+                                className="mb-3 h-6 w-auto object-contain"
+                                priority
+                            />
+                            <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-[#0D0D0D]/40">
+                                <CheckCircle2 className="h-4 w-4 text-[#012340]" aria-hidden />
+                                Confirmar acción
+                            </p>
+                            <h3 className="mt-1.5 text-sm font-bold text-[#012340]">Marcar como Gestionado</h3>
                         </div>
                         <div className="px-5 py-4 space-y-3">
                             <p className="text-sm text-[#0D0D0D]/70">¿Confirmas que esta solicitud ya fue atendida?</p>

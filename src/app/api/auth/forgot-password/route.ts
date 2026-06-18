@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
   try {
     const user = await prisma.user.findUnique({
       where: { email },
-      select: { id: true, active: true },
+      select: { id: true, active: true, name: true },
     });
 
     if (user?.active) {
@@ -60,8 +60,11 @@ export async function POST(req: NextRequest) {
         },
       });
 
+      // Extraer el primer nombre si existe
+      const firstName = user.name ? user.name.split(" ")[0] : undefined;
+
       // Fire-and-forget — no bloquear la respuesta por el envío del email
-      sendPasswordResetEmail(email, token).catch(console.error);
+      sendPasswordResetEmail(email, token, firstName).catch(console.error);
     }
   } catch (err) {
     console.error("[forgot-password]", err);

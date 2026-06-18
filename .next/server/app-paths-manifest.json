@@ -1,6 +1,6 @@
 {
-  "/api/auth/[...nextauth]/route": "app/api/auth/[...nextauth]/route.js",
-  "/api/usuario/bandeja/route": "app/api/usuario/bandeja/route.js",
-  "/api/usuario/bandeja/[radicado]/route": "app/api/usuario/bandeja/[radicado]/route.js",
+  "/api/auth/forgot-password/route": "app/api/auth/forgot-password/route.js",
+  "/login/page": "app/login/page.js",
+  "/forgot-password/page": "app/forgot-password/page.js",
   "/(protected)/usuario/bandeja/page": "app/(protected)/usuario/bandeja/page.js"
 }

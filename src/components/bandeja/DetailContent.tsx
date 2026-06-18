@@ -23,8 +23,6 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 
-// ─── Helpers de formato ───────────────────────────────────────────────────────
-
 function fmtMoneda(v: number | string | null | undefined): string {
   if (v === null || v === undefined || v === "") return "—";
   const n = typeof v === "string" ? parseFloat(v.replace(/[^0-9.-]/g, "")) : v;
@@ -96,13 +94,12 @@ function InfoRow({
     <div className="flex items-center justify-between gap-6 px-4 py-2.5">
       <span className="text-xs text-[#0D0D0D]/45 flex-shrink-0">{label}</span>
       <span
-        className={`text-xs text-right break-all leading-relaxed ${
-          highlight
+        className={`text-xs text-right break-all leading-relaxed ${highlight
             ? "font-bold text-[#012340]"
             : mono
               ? "font-mono text-[#0D0D0D]/65"
               : "font-medium text-[#0D0D0D]/80"
-        }`}
+          }`}
       >
         {value}
       </span>
@@ -179,8 +176,6 @@ function CriteriaSummary({ values }: { values: (1 | 2 | null)[] }) {
   );
 }
 
-// ─── Resumen principal ────────────────────────────────────────────────────────
-
 export function ResumenSolicitud({
   solicitud,
 }: {
@@ -226,7 +221,6 @@ export function ResumenSolicitud({
         </div>
       )}
 
-      {/* ── Solicitante ──────────────────────────────────────── */}
       <Section title="Solicitante">
         <InfoRow label="Nombre" value={solicitud.solicitante} highlight />
         <InfoRow label="Cédula" value={solicitud.cedula} mono />
@@ -261,7 +255,6 @@ export function ResumenSolicitud({
         <InfoRow label="Fecha solicitud" value={solicitud.fecha} />
       </Section>
 
-      {/* ── Solicitud / Oferta ────────────────────────────────── */}
       <Section title="Solicitud">
         {oferta ? (
           <>
@@ -304,7 +297,6 @@ export function ResumenSolicitud({
         )}
       </Section>
 
-      {/* ── Análisis financiero ───────────────────────────────── */}
       {(proc || mdDatos) && (
         <Section title="Análisis financiero">
           {ingresoTotal > 0 && (
@@ -351,7 +343,6 @@ export function ResumenSolicitud({
         </Section>
       )}
 
-      {/* ── Score Fondex ─────────────────────────────────────── */}
       {proc && (
         <Section title="Scoring Fondex">
           <InfoRow
@@ -370,7 +361,6 @@ export function ResumenSolicitud({
         </Section>
       )}
 
-      {/* ── Valida 1 — Criterios iniciales ───────────────────── */}
       <Section title="Valida 1 — Criterios del cliente">
         <CriteriaSummary
           values={[
@@ -403,7 +393,6 @@ export function ResumenSolicitud({
         />
       </Section>
 
-      {/* ── Identidad — Validación documental y facial ───────── */}
       <Section title="Identidad — Validación documental y facial">
         {ivData ? (
           <>
@@ -437,7 +426,6 @@ export function ResumenSolicitud({
         )}
       </Section>
 
-      {/* ── Motor de crédito — Viabilidad ────────────────────── */}
       <Section title="Motor de crédito — Viabilidad">
         {proc ? (
           <>
@@ -473,39 +461,36 @@ export function ResumenSolicitud({
         )}
       </Section>
 
-      {/* ── Motivos de rechazo ────────────────────────────────── */}
       {(detallesRechazo.length > 0 ||
         (v1resp?.mensaje && v1resp.motor1 !== 1)) && (
-        <Section title="Motivos no apto">
-          {detallesRechazo.length > 0 ? (
-            <div className="divide-y divide-[#0D0D0D]/6">
-              {detallesRechazo.map((detalle: string, i: number) => (
-                <div
-                  key={i}
-                  className="flex items-start gap-2.5 px-4 py-3 bg-red-50/60"
-                >
-                  <AlertTriangle className="h-3.5 w-3.5 text-red-400 flex-shrink-0 mt-0.5" />
-                  <p className="text-xs text-red-700 leading-relaxed">
-                    {detalle}
-                  </p>
-                </div>
-              ))}
-            </div>
-          ) : v1resp?.mensaje ? (
-            <div className="flex items-start gap-2.5 px-4 py-3 bg-red-50">
-              <AlertTriangle className="h-4 w-4 text-red-400 flex-shrink-0 mt-0.5" />
-              <p className="text-xs text-red-700 leading-relaxed">
-                {v1resp.mensaje}
-              </p>
-            </div>
-          ) : null}
-        </Section>
-      )}
+          <Section title="Motivos no apto">
+            {detallesRechazo.length > 0 ? (
+              <div className="divide-y divide-[#0D0D0D]/6">
+                {detallesRechazo.map((detalle: string, i: number) => (
+                  <div
+                    key={i}
+                    className="flex items-start gap-2.5 px-4 py-3 bg-red-50/60"
+                  >
+                    <AlertTriangle className="h-3.5 w-3.5 text-red-400 flex-shrink-0 mt-0.5" />
+                    <p className="text-xs text-red-700 leading-relaxed">
+                      {detalle}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            ) : v1resp?.mensaje ? (
+              <div className="flex items-start gap-2.5 px-4 py-3 bg-red-50">
+                <AlertTriangle className="h-4 w-4 text-red-400 flex-shrink-0 mt-0.5" />
+                <p className="text-xs text-red-700 leading-relaxed">
+                  {v1resp.mensaje}
+                </p>
+              </div>
+            ) : null}
+          </Section>
+        )}
     </div>
   );
 }
-
-// ─── Vista JSON — Monaco Editor ───────────────────────────────────────────────
 
 export function JsonView({ data }: { data: unknown }) {
   const formatted = useMemo(() => {
@@ -560,8 +545,6 @@ export function JsonView({ data }: { data: unknown }) {
   );
 }
 
-// ─── Vista multi-panel del JSON completo ──────────────────────────────────────
-
 type MotorJsonPanel =
   | "valida1"
   | "motor_data"
@@ -577,49 +560,49 @@ const MOTOR_JSON_PANELS: {
   icon: React.ReactNode;
   hasReqRes: boolean;
 }[] = [
-  {
-    id: "valida1",
-    shortLabel: "Validación",
-    icon: <ShieldCheck className="h-3.5 w-3.5" />,
-    hasReqRes: true,
-  },
-  {
-    id: "motor_data",
-    shortLabel: "Motor Data",
-    icon: <Database className="h-3.5 w-3.5" />,
-    hasReqRes: true,
-  },
-  {
-    id: "motor_process",
-    shortLabel: "Motor Process",
-    icon: <Cpu className="h-3.5 w-3.5" />,
-    hasReqRes: true,
-  },
-  {
-    id: "identity",
-    shortLabel: "Identidad",
-    icon: <FileJson className="h-3.5 w-3.5" />,
-    hasReqRes: true,
-  },
-  {
-    id: "workflow",
-    shortLabel: "Workflow",
-    icon: <Workflow className="h-3.5 w-3.5" />,
-    hasReqRes: true,
-  },
-  {
-    id: "envio_thomas",
-    shortLabel: "Envío Thomas",
-    icon: <Send className="h-3.5 w-3.5" />,
-    hasReqRes: true,
-  },
-  {
-    id: "tracking",
-    shortLabel: "Tracking",
-    icon: <History className="h-3.5 w-3.5" />,
-    hasReqRes: false,
-  },
-];
+    {
+      id: "valida1",
+      shortLabel: "Validación",
+      icon: <ShieldCheck className="h-3.5 w-3.5" />,
+      hasReqRes: true,
+    },
+    {
+      id: "motor_data",
+      shortLabel: "Motor Data",
+      icon: <Database className="h-3.5 w-3.5" />,
+      hasReqRes: true,
+    },
+    {
+      id: "motor_process",
+      shortLabel: "Motor Process",
+      icon: <Cpu className="h-3.5 w-3.5" />,
+      hasReqRes: true,
+    },
+    {
+      id: "identity",
+      shortLabel: "Identidad",
+      icon: <FileJson className="h-3.5 w-3.5" />,
+      hasReqRes: true,
+    },
+    {
+      id: "workflow",
+      shortLabel: "Workflow",
+      icon: <Workflow className="h-3.5 w-3.5" />,
+      hasReqRes: true,
+    },
+    {
+      id: "envio_thomas",
+      shortLabel: "Envío Thomas",
+      icon: <Send className="h-3.5 w-3.5" />,
+      hasReqRes: true,
+    },
+    {
+      id: "tracking",
+      shortLabel: "Tracking",
+      icon: <History className="h-3.5 w-3.5" />,
+      hasReqRes: false,
+    },
+  ];
 
 type ReqResSide = "req" | "res";
 
@@ -687,11 +670,10 @@ export function MotorJsonView({
                 <button
                   key={panel.id}
                   onClick={() => setActivePanel(panel.id as MotorJsonPanel)}
-                  className={`relative flex items-center gap-1.5 px-4 py-2.5 text-[11px] font-semibold whitespace-nowrap transition-colors border-r border-slate-200 last:border-r-0 ${
-                    isActive
+                  className={`relative flex items-center gap-1.5 px-4 py-2.5 text-[11px] font-semibold whitespace-nowrap transition-colors border-r border-slate-200 last:border-r-0 ${isActive
                       ? "bg-white text-[#012340]"
                       : "text-slate-400 hover:text-slate-600 hover:bg-white/70"
-                  }`}
+                    }`}
                 >
                   <span className="flex-shrink-0 text-emerald-600 transition-colors">
                     {panel.icon}
@@ -713,11 +695,10 @@ export function MotorJsonView({
                 <PopoverTrigger asChild>
                   <button
                     onClick={() => setActivePanel(panel.id as MotorJsonPanel)}
-                    className={`group relative flex items-center gap-1.5 pl-4 pr-2.5 py-2.5 text-[11px] font-semibold whitespace-nowrap transition-colors border-r border-slate-200 last:border-r-0 ${
-                      isActive
+                    className={`group relative flex items-center gap-1.5 pl-4 pr-2.5 py-2.5 text-[11px] font-semibold whitespace-nowrap transition-colors border-r border-slate-200 last:border-r-0 ${isActive
                         ? "bg-white text-[#012340]"
                         : "text-slate-400 hover:text-slate-600 hover:bg-white/70"
-                    }`}
+                      }`}
                   >
                     <span
                       className={`flex-shrink-0 transition-colors ${isActive ? "text-[#012340]" : "text-slate-300"}`}
@@ -764,11 +745,10 @@ export function MotorJsonView({
                               [panel.id]: s,
                             }));
                           }}
-                          className={`px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-sm transition-colors ${
-                            isCurrent
+                          className={`px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-sm transition-colors ${isCurrent
                               ? "bg-[#012340]/8 text-[#012340]"
                               : "text-[#0D0D0D]/35 hover:text-[#012340]/60"
-                          }`}
+                            }`}
                         >
                           {s === "req" ? "Req" : "Res"}
                         </button>
