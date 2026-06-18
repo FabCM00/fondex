@@ -13,6 +13,7 @@ import {
   Text,
 } from "react-email";
 import tailwindConfig from "./tailwind.config";
+import { Lock, LockKeyhole } from "lucide-react";
 
 interface WantInvitationEmailProps {
   userFirstname?: string;
@@ -94,7 +95,7 @@ export const WantInvitationEmail = ({
           <Section className="text-center mt-4 mb-6">
             <Text className="text-[13px] text-[#777777] font-medium inline-block m-0">
               <span style={{ display: "inline-block", verticalAlign: "middle", marginRight: "4px", fontSize: "14px" }}>
-                🔒
+                <LockKeyhole size={16} color="#777777" />
               </span>
               <span style={{ verticalAlign: "middle" }}>
                 Por tu seguridad, no reenvíes este correo a otras personas.

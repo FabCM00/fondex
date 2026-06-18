@@ -1,6 +1,6 @@
 {
-  "/api/auth/forgot-password/route": "app/api/auth/forgot-password/route.js",
-  "/login/page": "app/login/page.js",
   "/forgot-password/page": "app/forgot-password/page.js",
+  "/login/page": "app/login/page.js",
+  "/set-password/page": "app/set-password/page.js",
   "/(protected)/usuario/bandeja/page": "app/(protected)/usuario/bandeja/page.js"
 }
