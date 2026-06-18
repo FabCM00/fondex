@@ -1,24 +1,32 @@
 import { EmailClient } from "@azure/communication-email";
 import { render } from "@react-email/components";
 import * as React from "react";
-const client = new EmailClient(process.env.AZURE_EMAIL_CONNECTION_STRING!);
 import FondexInvitationEmail from "@/emails/fondex-invitation";
 import FondexPasswordResetEmail from "@/emails/fondex-password-reset";
 
-const FROM = process.env.EMAIL_FROM!;
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL!.replace(/\/$/, "");
+const getEmailClient = () => {
+  const connectionString = process.env.AZURE_EMAIL_CONNECTION_STRING;
+  if (!connectionString) {
+    console.warn("AZURE_EMAIL_CONNECTION_STRING is missing");
+  }
+  return new EmailClient(connectionString || "endpoint=https://dummy.communication.azure.com/;accesskey=dummy");
+};
+
+const getFromEmail = () => process.env.EMAIL_FROM || "noreply@fondex.com";
+const getAppUrl = () => (process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "");
 
 export async function sendPasswordResetEmail(
   to: string,
   token: string,
   userFirstname?: string,
 ): Promise<void> {
-  const link = `${APP_URL}/set-password?token=${token}`;
+  const link = `${getAppUrl()}/set-password?token=${token}`;
 
   const html = await render(<FondexPasswordResetEmail resetPasswordLink={link} userFirstname={userFirstname} />);
 
+  const client = getEmailClient();
   const poller = await client.beginSend({
-    senderAddress: FROM,
+    senderAddress: getFromEmail(),
     content: {
       subject: "Recuperación de contraseña — WANT TECH 4 ALL",
       html,
@@ -33,7 +41,7 @@ export async function sendInvitationEmail(
   token: string,
   invitedByName?: string,
 ): Promise<void> {
-  const link = `${APP_URL}/set-password?token=${token}&type=invite`;
+  const link = `${getAppUrl()}/set-password?token=${token}&type=invite`;
 
   const html = await render(
     <FondexInvitationEmail 
@@ -43,8 +51,9 @@ export async function sendInvitationEmail(
     />,
   );
 
+  const client = getEmailClient();
   const poller = await client.beginSend({
-    senderAddress: FROM,
+    senderAddress: getFromEmail(),
     content: {
       subject: "Invitación de acceso — WANT TECH 4 ALL",
       html,
