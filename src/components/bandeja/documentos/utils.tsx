@@ -24,38 +24,14 @@ export interface Documento {
   size: number;
   contentType: string;
   uploadedAt: string;
-  /** Tipo de crédito (carpeta). Texto libre: etiqueta legible. */
   category: string;
   status: DocStatus;
 }
 
-// ─── Categorías (carpetas por tipo de crédito) ────────────────────────────────
 
+/** Carpeta por defecto cuando se carga un documento sin indicar el tipo. */
 export const DEFAULT_CATEGORY = "Documentos generales";
 
-/** Opción especial del selector para escribir una categoría propia. */
-export const CUSTOM_CATEGORY_ID = "otro";
-
-/**
- * Opciones rápidas del selector de carga. `full` es la etiqueta que se guarda y
- * que titula la carpeta; `label` es el texto corto del botón.
- */
-export interface CategoryPreset {
-  id: string;
-  label: string;
-  full: string;
-}
-
-export const CATEGORY_PRESETS: CategoryPreset[] = [
-  { id: "vivienda", label: "Vivienda", full: "Crédito Vivienda" },
-  { id: "vehiculo", label: "Vehículo", full: "Crédito Vehículo" },
-  { id: "general", label: "General", full: DEFAULT_CATEGORY },
-];
-
-/** Orden preferido de carpetas; las personalizadas van después (alfabéticas). */
-export const CATEGORY_ORDER = CATEGORY_PRESETS.map((p) => p.full);
-
-// ─── Estados de validación ────────────────────────────────────────────────────
 
 export const STATUS_CONFIG: Record<
   DocStatus,
@@ -81,10 +57,8 @@ export const STATUS_CONFIG: Record<
   },
 };
 
-/** Orden en que se ofrecen los estados en el menú contextual. */
 export const STATUS_OPTIONS: DocStatus[] = ["pendiente", "revision", "validado"];
 
-// ─── Helpers de presentación ──────────────────────────────────────────────────
 
 export function formatFileSize(bytes: number): string {
   if (bytes === 0) return "0 Bytes";

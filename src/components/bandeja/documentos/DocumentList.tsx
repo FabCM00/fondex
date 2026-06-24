@@ -21,7 +21,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  CATEGORY_ORDER,
   DEFAULT_CATEGORY,
   FileThumb,
   STATUS_CONFIG,
@@ -170,9 +169,9 @@ export function DocumentList({
   onUpdateStatus,
   onUpload,
 }: DocumentListProps) {
-  // Agrupa por etiqueta de categoría (texto libre). Las predefinidas van primero
-  // (orden de CATEGORY_ORDER) y las personalizadas después, alfabéticas. Los docs
-  // ya vienen ordenados por fecha desde el backend.
+  // Agrupa por tipo de documento (texto libre). La carpeta por defecto va
+  // primero y el resto en orden alfabético. Dentro de cada carpeta los docs ya
+  // vienen ordenados por fecha desde el backend.
   const groups = useMemo(() => {
     const map = new Map<string, Documento[]>();
     for (const d of docs) {
@@ -181,16 +180,12 @@ export function DocumentList({
       if (arr) arr.push(d);
       else map.set(key, [d]);
     }
-    const rank = (label: string) => {
-      const i = CATEGORY_ORDER.indexOf(label);
-      return i === -1 ? Number.MAX_SAFE_INTEGER : i;
-    };
     return Array.from(map.entries())
       .map(([label, ds]) => ({ label, docs: ds }))
       .sort((a, b) => {
-        const ra = rank(a.label);
-        const rb = rank(b.label);
-        return ra !== rb ? ra - rb : a.label.localeCompare(b.label, "es");
+        if (a.label === DEFAULT_CATEGORY) return -1;
+        if (b.label === DEFAULT_CATEGORY) return 1;
+        return a.label.localeCompare(b.label, "es");
       });
   }, [docs]);
 
@@ -234,7 +229,7 @@ export function DocumentList({
         </Button>
       </div>
 
-      {/* Carpetas por tipo de crédito */}
+      {/* Carpetas por tipo de documento */}
       <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-5 py-5 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
         {groups.map((group) => (
           <section key={group.label}>
