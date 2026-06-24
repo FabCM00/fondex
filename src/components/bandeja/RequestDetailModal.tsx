@@ -5,6 +5,7 @@ import { type SolicitudUI, type SolicitudDetail } from "@/lib/bandeja";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import { ModalHeader, ModalTabs, type DetailModalTab } from "./ModalHeader";
 import { MotorJsonView, ResumenSolicitud } from "./DetailContent";
+import { DocumentosTab } from "./documentos/DocumentosTab";
 
 function isDetail(s: SolicitudUI): s is SolicitudDetail {
     return s.raw != null;
@@ -41,7 +42,14 @@ export function RequestDetailModal({
                 />
                 <ModalTabs active={activeTab} onChange={setActiveTab} />
                 <div className="flex-1 overflow-auto min-h-0 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
-                    {detail ? (
+                    {activeTab === "documentos" ? (
+                        <DocumentosTab
+                            cedula={solicitud.cedula}
+                            solicitante={solicitud.solicitante}
+                            radicado={solicitud.radicado}
+                            showHeader={false}
+                        />
+                    ) : detail ? (
                         <>
                             {activeTab === "campos"     && <ResumenSolicitud solicitud={detail} />}
                             {activeTab === "motor_json" && <MotorJsonView    solicitud={detail} hideExpand />}

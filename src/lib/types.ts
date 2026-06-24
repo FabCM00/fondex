@@ -75,18 +75,12 @@ export interface RawWorkflowRow {
 
 export interface RawCreditTrackingRow {
   radicado: string;
-  cedula: string;
-  nombreCliente?: string | null;
-  emailCliente?: string | null;
+  cedula?: string | null;
+  correo?: string | null;
   numeroFlujo?: number | null;
-  estado135?: string | null;
-  referencia?: string | null;
-  numeroSolicitud?: string | null;
-  estado143?: string | null;
-  estadoAprobacion?: string | null;
+  req135?: string | null;
+  req143?: string | null;
   completado?: boolean | null;
-  datos135?: Json;
-  datos143?: Json;
   updatedAt?: string | null;
   [key: string]: Json;
 }

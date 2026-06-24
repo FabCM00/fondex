@@ -3,9 +3,11 @@ import { auth } from "../../../../../auth";
 import {
   deleteDocument,
   isAllowedContentType,
+  isValidStatus,
   listDocuments,
   MAX_DOCUMENT_BYTES,
   sanitizeCedula,
+  setDocumentStatus,
   uploadDocument,
 } from "@/lib/azure-blob";
 
@@ -59,7 +61,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const documento = await uploadDocument(cedula, file);
+    const category = String(formData.get("category") ?? "general");
+    const documento = await uploadDocument(cedula, file, category);
     return NextResponse.json({ ok: true, documento }, { status: 201 });
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : "Error interno.";
@@ -81,6 +84,38 @@ export async function DELETE(req: NextRequest) {
 
   try {
     await deleteDocument(cedula, id);
+    return NextResponse.json({ ok: true });
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : "Error interno.";
+    return NextResponse.json({ ok: false, message: msg }, { status: 500 });
+  }
+}
+
+export async function PATCH(req: NextRequest) {
+  const session = await auth();
+  if (!session?.user) {
+    return NextResponse.json({ ok: false, message: "No autorizado." }, { status: 401 });
+  }
+
+  const cedula = req.nextUrl.searchParams.get("cedula") ?? "";
+  const id = req.nextUrl.searchParams.get("id") ?? "";
+  if (!sanitizeCedula(cedula) || !id) {
+    return NextResponse.json({ ok: false, message: "Parámetros requeridos." }, { status: 400 });
+  }
+
+  let status = "";
+  try {
+    const body = (await req.json()) as { status?: string };
+    status = body.status ?? "";
+  } catch {
+    return NextResponse.json({ ok: false, message: "Cuerpo inválido." }, { status: 400 });
+  }
+  if (!isValidStatus(status)) {
+    return NextResponse.json({ ok: false, message: "Estado no válido." }, { status: 400 });
+  }
+
+  try {
+    await setDocumentStatus(cedula, id, status);
     return NextResponse.json({ ok: true });
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : "Error interno.";

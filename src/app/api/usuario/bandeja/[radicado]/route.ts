@@ -206,7 +206,7 @@ export async function GET(
     // como gestionada por el sistema, una sola vez, si aún no lo estaba.
     let gestionadoAt = v1.gestionadoAt;
     let gestionadoBy = v1.gestionadoBy;
-    if (!gestionadoAt && esContabilizado(v1.creditTracking?.estado143)) {
+    if (!gestionadoAt && esContabilizado(v1.creditTracking?.req143)) {
       gestionadoAt = new Date();
       gestionadoBy = "sistema";
       await prisma.valida1Results.update({
@@ -232,7 +232,7 @@ export async function GET(
       solicitante:   buildSolicitante(v1Resp, mdResp),
       fecha:         parseFecha(v1.radicado, v1.createdAt.toISOString()),
       valor:         extractMonto(mdResp, motorResp ?? {}),
-      estado:        deriveEstado(v1Resp, motorResp, ivResp, md !== null, v1.creditTracking?.estado143),
+      estado:        deriveEstado(v1Resp, motorResp, ivResp, md !== null, v1.creditTracking?.req143),
       score:         extractScore(mdResp),
       decisionTexto: decisionTexto(v1Resp, motorResp ?? {}),
       sinMotor:      !motor,

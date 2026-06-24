@@ -10,6 +10,46 @@ const ALLOWED_CONTENT_TYPES = new Set([
 ]);
 export const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024; // 10 MB
 
+/** Ciclo de validación del documento. Por defecto entra como "pendiente". */
+export const DOCUMENT_STATUSES = ["pendiente", "revision", "validado"] as const;
+export type DocumentoEstado = (typeof DOCUMENT_STATUSES)[number];
+
+/**
+ * La categoría (tipo de crédito) es texto libre: además de las predefinidas, el
+ * usuario puede escribir la suya. Se guarda como etiqueta legible.
+ */
+export const DEFAULT_CATEGORY = "Documentos generales";
+const MAX_CATEGORY_LEN = 60;
+
+/** Mapeo de los slugs antiguos a su etiqueta (compatibilidad con docs previos). */
+const LEGACY_CATEGORY_LABELS: Record<string, string> = {
+  vivienda: "Crédito Vivienda",
+  vehiculo: "Crédito Vehículo",
+  general: DEFAULT_CATEGORY,
+};
+
+/** Limpia/recorta la etiqueta de categoría escrita por el usuario. */
+function sanitizeCategory(value: string | null | undefined): string {
+  const v = (value ?? "").trim().replace(/\s+/g, " ");
+  return v ? v.slice(0, MAX_CATEGORY_LEN) : DEFAULT_CATEGORY;
+}
+
+/** Resuelve la etiqueta de categoría desde la metadata del blob. */
+function readCategory(meta: Record<string, string>): string {
+  if (meta.categoryname) return decodeName(meta.categoryname, DEFAULT_CATEGORY);
+  if (meta.category)
+    return LEGACY_CATEGORY_LABELS[meta.category] ?? sanitizeCategory(meta.category);
+  return DEFAULT_CATEGORY;
+}
+
+export function isValidStatus(value: string): value is DocumentoEstado {
+  return DOCUMENT_STATUSES.includes(value as DocumentoEstado);
+}
+
+function normalizeStatus(value: string | null | undefined): DocumentoEstado {
+  return isValidStatus(value ?? "") ? (value as DocumentoEstado) : "pendiente";
+}
+
 export interface DocumentoMeta {
   /** Nombre del blob, incluye el prefijo de la cédula (p.ej. "123/uuid-archivo.pdf"). */
   id: string;
@@ -19,6 +59,10 @@ export interface DocumentoMeta {
   contentType: string;
   /** ISO 8601. */
   uploadedAt: string;
+  /** Tipo de crédito (carpeta en la bandeja). Texto libre. */
+  category: string;
+  /** Estado de validación. */
+  status: DocumentoEstado;
 }
 
 // Singleton: evita múltiples clientes con el Hot Reload de Next.js.
@@ -90,6 +134,8 @@ export async function listDocuments(cedula: string): Promise<DocumentoMeta[]> {
       size: blob.properties.contentLength ?? 0,
       contentType: blob.properties.contentType ?? "application/octet-stream",
       uploadedAt: uploaded.toISOString(),
+      category: readCategory(meta),
+      status: normalizeStatus(meta.status),
     });
   }
 
@@ -100,6 +146,7 @@ export async function listDocuments(cedula: string): Promise<DocumentoMeta[]> {
 export async function uploadDocument(
   cedula: string,
   file: File,
+  category: string,
 ): Promise<DocumentoMeta> {
   const safe = sanitizeCedula(cedula);
   if (!safe) throw new Error("Cédula inválida.");
@@ -107,6 +154,7 @@ export async function uploadDocument(
   const container = getContainerClient();
   await container.createIfNotExists();
 
+  const label = sanitizeCategory(category);
   const contentType = file.type || "application/octet-stream";
   const blobName = `${safe}/${randomUUID()}-${sanitizeFilename(file.name)}`;
   const blockBlob = container.getBlockBlobClient(blobName);
@@ -114,7 +162,13 @@ export async function uploadDocument(
   const buffer = Buffer.from(await file.arrayBuffer());
   await blockBlob.uploadData(buffer, {
     blobHTTPHeaders: { blobContentType: contentType },
-    metadata: { originalname: encodeName(file.name) },
+    // categoryname va en base64: la metadata de Azure solo admite ASCII y la
+    // etiqueta puede traer acentos/espacios (p. ej. "Crédito Educativo").
+    metadata: {
+      originalname: encodeName(file.name),
+      categoryname: encodeName(label),
+      status: "pendiente",
+    },
   });
 
   return {
@@ -123,7 +177,33 @@ export async function uploadDocument(
     size: buffer.length,
     contentType,
     uploadedAt: new Date().toISOString(),
+    category: label,
+    status: "pendiente",
   };
+}
+
+/**
+ * Cambia el estado de validación de un documento. `setMetadata` reemplaza toda
+ * la metadata, así que primero leemos la actual y la fusionamos para conservar
+ * el nombre original y la categoría.
+ */
+export async function setDocumentStatus(
+  cedula: string,
+  id: string,
+  status: DocumentoEstado,
+): Promise<void> {
+  const safe = sanitizeCedula(cedula);
+  if (!safe) throw new Error("Cédula inválida.");
+  if (!id.startsWith(`${safe}/`)) {
+    throw new Error("El documento no pertenece a la cédula indicada.");
+  }
+
+  const container = getContainerClient();
+  const blob = container.getBlockBlobClient(id);
+  if (!(await blob.exists())) throw new Error("Documento no encontrado.");
+
+  const props = await blob.getProperties();
+  await blob.setMetadata({ ...(props.metadata ?? {}), status });
 }
 
 export async function deleteDocument(cedula: string, id: string): Promise<void> {

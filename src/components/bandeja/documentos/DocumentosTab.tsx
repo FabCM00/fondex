@@ -10,10 +10,23 @@ import { Button } from "@/components/ui/button";
 import { DocumentList } from "./DocumentList";
 import { UploadDocumentModal } from "./UploadDocumentModal";
 import { useDocumentos } from "./useDocumentos";
-import { COMMUNICATIONS_URL, type Documento } from "./utils";
+import { COMMUNICATIONS_URL, STATUS_CONFIG, type DocStatus, type Documento } from "./utils";
 
-export function DocumentosTab({ cedula }: { cedula: string }) {
-  const { docs, loading, error, refetch, refresh, remove } =
+interface DocumentosTabProps {
+  cedula: string;
+  solicitante?: string;
+  radicado?: string;
+  /** En el modal expandido el encabezado lo pinta ModalHeader; aquí se omite. */
+  showHeader?: boolean;
+}
+
+export function DocumentosTab({
+  cedula,
+  solicitante,
+  radicado,
+  showHeader = true,
+}: DocumentosTabProps) {
+  const { docs, loading, error, refetch, refresh, remove, updateStatus } =
     useDocumentos(cedula);
   const { confirm, notify } = useNotification();
   const [modalOpen, setModalOpen] = useState(false);
@@ -53,32 +66,85 @@ export function DocumentosTab({ cedula }: { cedula: string }) {
     [confirm, notify, remove],
   );
 
+  const handleUpdateStatus = useCallback(
+    async (doc: Documento, status: DocStatus) => {
+      try {
+        await updateStatus(doc, status);
+        notify({
+          type: "success",
+          message: (
+            <>
+              Documento marcado como{" "}
+              <span className="font-semibold">
+                {STATUS_CONFIG[status].label}
+              </span>
+              .
+            </>
+          ),
+        });
+      } catch (e) {
+        notify({
+          type: "error",
+          message:
+            e instanceof Error ? e.message : "No se pudo actualizar el estado.",
+        });
+      }
+    },
+    [updateStatus, notify],
+  );
+
+  const header = showHeader ? (
+    <div className="flex-shrink-0 border-b border-[#0D0D0D]/10 px-5 py-4">
+      <h3 className="text-base font-bold text-[#012340]">
+        Bandeja de documentos
+      </h3>
+      <p className="mt-0.5 truncate text-xs text-[#0D0D0D]/55">
+        {solicitante ? (
+          <span className="font-medium text-[#0D0D0D]/70">{solicitante}</span>
+        ) : null}
+        {solicitante ? " · " : null}CC {cedula}
+      </p>
+    </div>
+  ) : null;
+
   if (loading) {
-    return <LoadingScreen message="Cargando documentoS" fullScreen={false} />;
+    return (
+      <div className="flex h-full flex-col bg-white">
+        {header}
+        <div className="min-h-0 flex-1">
+          <LoadingScreen message="Cargando documentos" fullScreen={false} />
+        </div>
+      </div>
+    );
   }
 
   if (error) {
     return (
-      <div className="flex h-full min-h-[320px] flex-col items-center justify-center gap-3 px-8 text-center">
-        <AlertCircle className="h-7 w-7 text-red-500" aria-hidden />
-        <p className="max-w-[360px] text-sm text-[#0D0D0D]/55">{error}</p>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="border-[#012340]/20 text-[#012340] hover:bg-[#012340]/5"
-          onClick={refetch}
-        >
-          Reintentar
-        </Button>
+      <div className="flex h-full flex-col bg-white">
+        {header}
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 px-8 text-center">
+          <AlertCircle className="h-7 w-7 text-red-500" aria-hidden />
+          <p className="max-w-[360px] text-sm text-[#0D0D0D]/55">{error}</p>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="border-[#012340]/20 text-[#012340] hover:bg-[#012340]/5"
+            onClick={refetch}
+          >
+            Reintentar
+          </Button>
+        </div>
       </div>
     );
   }
 
   return (
-    <>
+    <div className="flex h-full flex-col bg-white">
+      {header}
+
       {docs.length === 0 ? (
-        <div className="flex h-full min-h-[320px] flex-col items-center justify-center gap-7 px-8 py-10">
+        <div className="flex flex-1 flex-col items-center justify-center gap-7 px-8 py-10">
           <Image
             src="/documentos.png"
             alt="Sin documentos"
@@ -115,12 +181,16 @@ export function DocumentosTab({ cedula }: { cedula: string }) {
           </div>
         </div>
       ) : (
-        <DocumentList
-          cedula={cedula}
-          docs={docs}
-          onDelete={handleDelete}
-          onUpload={openModal}
-        />
+        <div className="min-h-0 flex-1">
+          <DocumentList
+            cedula={cedula}
+            radicado={radicado}
+            docs={docs}
+            onDelete={handleDelete}
+            onUpdateStatus={handleUpdateStatus}
+            onUpload={openModal}
+          />
+        </div>
       )}
 
       {modalOpen && (
@@ -130,6 +200,6 @@ export function DocumentosTab({ cedula }: { cedula: string }) {
           onUploaded={refresh}
         />
       )}
-    </>
+    </div>
   );
 }

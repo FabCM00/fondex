@@ -45,21 +45,15 @@ model EnvioThomasResults {
 }
 
 model CreditTracking {
-  radicado         String         @id
-  cedula           String
-  nombreCliente    String?        @map("nombre_cliente")
-  emailCliente     String?        @map("email_cliente")
-  numeroFlujo      BigInt?        @map("numero_flujo")
-  estado135        String?        @map("estado_135")
-  referencia       String?
-  numeroSolicitud  String?        @map("numero_solicitud")
-  estado143        String?        @map("estado_143")
-  estadoAprobacion String?        @map("estado_aprobacion")
-  completado       Boolean?
-  datos135         Json?          @map("datos_135")
-  datos143         Json?          @map("datos_143")
-  updatedAt        DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
-  valida1          Valida1Results @relation(fields: [radicado], references: [radicado], onUpdate: Cascade, onDelete: Restrict, map: "fk_credit_tracking_radicado")
+  radicado    String         @id
+  cedula      String?
+  correo      String?
+  numeroFlujo Int?           @map("numero_flujo")
+  req135      String?        @map("req_135")
+  req143      String?        @map("req_143")
+  completado  Boolean        @default(false)
+  updatedAt   DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  valida1     Valida1Results @relation(fields: [radicado], references: [radicado], onUpdate: Cascade, onDelete: Restrict, map: "fk_credit_tracking_radicado")
 
   @@index([cedula], map: "idx_credit_tracking_cedula")
   @@index([updatedAt(sort: Desc)], map: "idx_credit_tracking_updated")

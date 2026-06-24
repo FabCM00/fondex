@@ -9,7 +9,7 @@ export interface UseDocumentUpload {
   progress: number;
   status: UploadStatus;
   error: string | null;
-  start: (file: File) => void;
+  start: (file: File, category: string) => void;
   reset: () => void;
 }
 
@@ -33,7 +33,7 @@ export function useDocumentUpload(
   }, []);
 
   const start = useCallback(
-    (selected: File) => {
+    (selected: File, category: string) => {
       setError(null);
 
       if (!VALID_FILE_TYPES.includes(selected.type)) {
@@ -53,6 +53,7 @@ export function useDocumentUpload(
 
       const form = new FormData();
       form.append("file", selected);
+      form.append("category", category);
 
       const xhr = new XMLHttpRequest();
       xhrRef.current = xhr;

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 
-import { API, type Documento } from "./utils";
+import { API, type DocStatus, type Documento } from "./utils";
 
 export interface UseDocumentos {
   docs: Documento[];
@@ -10,6 +10,7 @@ export interface UseDocumentos {
   /** Recarga "silenciosa": no activa el estado `loading` (no desmonta la vista). */
   refresh: () => Promise<void>;
   remove: (doc: Documento) => Promise<void>;
+  updateStatus: (doc: Documento, status: DocStatus) => Promise<void>;
 }
 
 /**
@@ -76,5 +77,28 @@ export function useDocumentos(cedula: string): UseDocumentos {
     [cedula],
   );
 
-  return { docs, loading, error, refetch, refresh, remove };
+  // Cambia el estado de validación. Actualiza la lista en el acto; lanza el
+  // error para que la UI lo notifique.
+  const updateStatus = useCallback(
+    async (doc: Documento, status: DocStatus) => {
+      const res = await fetch(
+        `${API}?cedula=${encodeURIComponent(cedula)}&id=${encodeURIComponent(doc.id)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status }),
+        },
+      );
+      const json = (await res.json()) as { ok?: boolean; message?: string };
+      if (!res.ok || !json.ok) {
+        throw new Error(json.message ?? "No se pudo actualizar el estado.");
+      }
+      setDocs((prev) =>
+        prev.map((d) => (d.id === doc.id ? { ...d, status } : d)),
+      );
+    },
+    [cedula],
+  );
+
+  return { docs, loading, error, refetch, refresh, remove, updateStatus };
 }

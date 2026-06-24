@@ -1,6 +1,8 @@
 {
-  "/forgot-password/page": "app/forgot-password/page.js",
-  "/login/page": "app/login/page.js",
-  "/set-password/page": "app/set-password/page.js",
+  "/api/auth/[...nextauth]/route": "app/api/auth/[...nextauth]/route.js",
+  "/api/usuario/bandeja/route": "app/api/usuario/bandeja/route.js",
+  "/api/usuario/documentos/route": "app/api/usuario/documentos/route.js",
+  "/api/usuario/documentos/download/route": "app/api/usuario/documentos/download/route.js",
+  "/api/usuario/bandeja/[radicado]/route": "app/api/usuario/bandeja/[radicado]/route.js",
   "/(protected)/usuario/bandeja/page": "app/(protected)/usuario/bandeja/page.js"
 }

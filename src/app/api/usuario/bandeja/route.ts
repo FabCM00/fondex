@@ -3,7 +3,6 @@ import { auth } from "../../../../../auth";
 import { prisma } from "@/lib/prisma";
 import { withPrismaRetry } from "@/lib/prisma-retry";
 
-
 // estado_143 == "C" (contabilizado) → la solicitud debe pasar a gestionada
 function esContabilizado(estado143: string | null | undefined): boolean {
   return (estado143 ?? "").trim().toUpperCase() === "C";
@@ -17,7 +16,10 @@ function parseFecha(radicado: string, fallback: string): string {
   return fallback.slice(0, 10);
 }
 
-function buildSolicitante(v1Resp: Record<string, unknown>, mdResp: Record<string, unknown>): string {
+function buildSolicitante(
+  v1Resp: Record<string, unknown>,
+  mdResp: Record<string, unknown>,
+): string {
   const asociadoMd = (mdResp?.datos_asociado ?? {}) as Record<string, unknown>;
   const asociadoV1 = (v1Resp?.datos_asociado ?? {}) as Record<string, unknown>;
   const nombre =
@@ -27,11 +29,16 @@ function buildSolicitante(v1Resp: Record<string, unknown>, mdResp: Record<string
   return nombre.trim() || "—";
 }
 
-function extractMonto(mdResp: Record<string, unknown>, motorResp: Record<string, unknown>): number {
+function extractMonto(
+  mdResp: Record<string, unknown>,
+  motorResp: Record<string, unknown>,
+): number {
   const oferta = (motorResp?.oferta ?? {}) as Record<string, unknown>;
-  if (typeof oferta?.monto === "number" && Number.isFinite(oferta.monto)) return oferta.monto as number;
+  if (typeof oferta?.monto === "number" && Number.isFinite(oferta.monto))
+    return oferta.monto as number;
   const asociado = (mdResp?.datos_asociado ?? {}) as Record<string, unknown>;
-  if (typeof asociado?.salarioBase === "number") return asociado.salarioBase as number;
+  if (typeof asociado?.salarioBase === "number")
+    return asociado.salarioBase as number;
   return 0;
 }
 
@@ -40,7 +47,10 @@ function extractMonto(mdResp: Record<string, unknown>, motorResp: Record<string,
 function normMotor2(rawMotor2: unknown): 1 | 2 | null {
   if (rawMotor2 === 1) return 1;
   if (rawMotor2 === 2) return 2;
-  const txt = String(rawMotor2 ?? "").toUpperCase().replace(/\s+/g, "").trim();
+  const txt = String(rawMotor2 ?? "")
+    .toUpperCase()
+    .replace(/\s+/g, "")
+    .trim();
   if (txt === "VIABLE") return 1;
   if (txt === "NOVIABLE") return 2;
   return null;
@@ -72,10 +82,7 @@ function deriveEstado(
     const tipo = identityResp?.tipo_validacion;
 
     // 3: Val Identidad
-    if (
-      statusFace === 1 &&
-      ((tipo === 1 && statusDoc === 1) || tipo === 2)
-    ) {
+    if (statusFace === 1 && ((tipo === 1 && statusDoc === 1) || tipo === 2)) {
       return "val_identidad";
     }
     // 4: No Val Identidad
@@ -85,7 +92,9 @@ function deriveEstado(
   }
 
   // ── Reglas 5-9: flujo post-motor ──
-  const status = String(motorResp?.status ?? "").trim().toLowerCase();
+  const status = String(motorResp?.status ?? "")
+    .trim()
+    .toLowerCase();
   // 5: Fallo en servicios — motor_process existe pero status !== "ok"
   if (motorResp !== null && status !== "ok") return "fallo_servicios";
 
@@ -112,7 +121,10 @@ function extractScore(mdResp: Record<string, unknown>): number | null {
   return typeof score === "number" ? score : null;
 }
 
-function decisionTexto(v1Resp: Record<string, unknown>, motorResp: Record<string, unknown>): string {
+function decisionTexto(
+  v1Resp: Record<string, unknown>,
+  motorResp: Record<string, unknown>,
+): string {
   const rawMotor2 = motorResp?.motor2;
   if (rawMotor2 === 1) return "Viable";
   if (rawMotor2 === 2) return "No viable";
@@ -121,7 +133,8 @@ function decisionTexto(v1Resp: Record<string, unknown>, motorResp: Record<string
   if (status) return status;
   const motor1 = v1Resp?.motor1;
   if (motor1 === 1) return "Pendiente de motor";
-  if (motor1 === 2) return (v1Resp?.mensaje as string) ?? "No apto en validación inicial";
+  if (motor1 === 2)
+    return (v1Resp?.mensaje as string) ?? "No apto en validación inicial";
   return "Pendiente de validación";
 }
 
@@ -137,39 +150,79 @@ function normBool(v: unknown): 1 | 2 | null {
   return null;
 }
 
-function buildValidaciones(v1Resp: Record<string, unknown>, motorResp: Record<string, unknown>) {
+function buildValidaciones(
+  v1Resp: Record<string, unknown>,
+  motorResp: Record<string, unknown>,
+) {
   const items = [
-    { label: "Resultado Validación 1", key: "motor1", estado: norm(v1Resp?.motor1) },
-    { label: "Validación Identidad (ID)", key: "valida_id", estado: norm(v1Resp?.valida_id) },
-    { label: "Validación Email", key: "valida_email", estado: norm(v1Resp?.valida_email) },
-    { label: "Validación Celular", key: "valida_celular", estado: norm(v1Resp?.valida_celular) },
-    { label: "Validación Apellido", key: "valida_last_name", estado: norm(v1Resp?.valida_last_name) },
-    { label: "Validación Capacidad", key: "valida_capacidad", estado: norm(v1Resp?.valida_capacidad) },
-    { label: "Validación Estado Laboral", key: "valida_estado_laboral", estado: norm(v1Resp?.valida_estado_laboral) },
+    {
+      label: "Resultado Validación 1",
+      key: "motor1",
+      estado: norm(v1Resp?.motor1),
+    },
+    {
+      label: "Validación Identidad (ID)",
+      key: "valida_id",
+      estado: norm(v1Resp?.valida_id),
+    },
+    {
+      label: "Validación Email",
+      key: "valida_email",
+      estado: norm(v1Resp?.valida_email),
+    },
+    {
+      label: "Validación Celular",
+      key: "valida_celular",
+      estado: norm(v1Resp?.valida_celular),
+    },
+    {
+      label: "Validación Apellido",
+      key: "valida_last_name",
+      estado: norm(v1Resp?.valida_last_name),
+    },
+    {
+      label: "Validación Capacidad",
+      key: "valida_capacidad",
+      estado: norm(v1Resp?.valida_capacidad),
+    },
+    {
+      label: "Validación Estado Laboral",
+      key: "valida_estado_laboral",
+      estado: norm(v1Resp?.valida_estado_laboral),
+    },
   ];
 
   const proc = (motorResp?.processing ?? {}) as Record<string, unknown>;
   if (Object.keys(proc).length) {
     items.push(
-      { label: "Viabilidad crediticia", key: "viabilidadDef", estado: normBool(proc?.viabilidadDef) },
-      { label: "Viabilidad criterio 1", key: "viabilidad1", estado: normBool(proc?.viabilidad1) },
+      {
+        label: "Viabilidad crediticia",
+        key: "viabilidadDef",
+        estado: normBool(proc?.viabilidadDef),
+      },
+      {
+        label: "Viabilidad criterio 1",
+        key: "viabilidad1",
+        estado: normBool(proc?.viabilidad1),
+      },
     );
   }
 
   return items;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// GET — listar solicitudes
-// ─────────────────────────────────────────────────────────────────────────────
 export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session?.user) {
-    return NextResponse.json({ ok: false, message: "No autorizado." }, { status: 401 });
+    return NextResponse.json(
+      { ok: false, message: "No autorizado." },
+      { status: 401 },
+    );
   }
 
   const limit = parseInt(req.nextUrl.searchParams.get("limit") ?? "200");
-  const cedulaFilter = req.nextUrl.searchParams.get("cedulaFilter") ?? undefined;
+  const cedulaFilter =
+    req.nextUrl.searchParams.get("cedulaFilter") ?? undefined;
 
   const where: { cedula?: string } = {};
   if (cedulaFilter) where.cedula = cedulaFilter;
@@ -187,7 +240,7 @@ export async function GET(req: NextRequest) {
           motorProcess: { select: { responseJson: true } },
           motorData: { select: { radicado: true, responseJson: true } },
           identity: { select: { responseJson: true } },
-          creditTracking: { select: { estado143: true } },
+          creditTracking: { select: { req143: true } },
         },
         orderBy: { createdAt: "desc" },
         take: limit,
@@ -197,7 +250,9 @@ export async function GET(req: NextRequest) {
     // Auto-gestionado: estado_143 == "C" (contabilizado) marca la solicitud
     // como gestionada por el sistema, una sola vez, si aún no lo estaba.
     const autoGestionar = v1Rows
-      .filter((v1) => !v1.gestionadoAt && esContabilizado(v1.creditTracking?.estado143))
+      .filter(
+        (v1) => !v1.gestionadoAt && esContabilizado(v1.creditTracking?.req143),
+      )
       .map((v1) => v1.radicado);
 
     const autoGestionadoAt = new Date();
@@ -218,11 +273,16 @@ export async function GET(req: NextRequest) {
       const iv = v1.identity ?? null;
 
       const v1Resp = (v1.responseJson ?? {}) as Record<string, unknown>;
-      const motorResp = motor ? ((motor.responseJson ?? {}) as Record<string, unknown>) : null;
+      const motorResp = motor
+        ? ((motor.responseJson ?? {}) as Record<string, unknown>)
+        : null;
       const mdResp = (md?.responseJson ?? {}) as Record<string, unknown>;
-      const ivResp = iv ? ((iv.responseJson ?? {}) as Record<string, unknown>) : null;
+      const ivResp = iv
+        ? ((iv.responseJson ?? {}) as Record<string, unknown>)
+        : null;
 
-      const gestionadoAt = v1.gestionadoAt ?? (autoSet.has(v1.radicado) ? autoGestionadoAt : null);
+      const gestionadoAt =
+        v1.gestionadoAt ?? (autoSet.has(v1.radicado) ? autoGestionadoAt : null);
 
       return {
         radicado: v1.radicado,
@@ -230,7 +290,13 @@ export async function GET(req: NextRequest) {
         solicitante: buildSolicitante(v1Resp, mdResp),
         fecha: parseFecha(v1.radicado, v1.createdAt.toISOString()),
         valor: extractMonto(mdResp, motorResp ?? {}),
-        estado: deriveEstado(v1Resp, motorResp, ivResp, md !== null, v1.creditTracking?.estado143),
+        estado: deriveEstado(
+          v1Resp,
+          motorResp,
+          ivResp,
+          md !== null,
+          v1.creditTracking?.req143,
+        ),
         score: extractScore(mdResp),
         decisionTexto: decisionTexto(v1Resp, motorResp ?? {}),
         sinMotor: !motor,
@@ -247,19 +313,22 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// PATCH — marcar como gestionado
-// ─────────────────────────────────────────────────────────────────────────────
 export async function PATCH(req: NextRequest) {
   const session = await auth();
   if (!session?.user) {
-    return NextResponse.json({ ok: false, message: "No autorizado." }, { status: 401 });
+    return NextResponse.json(
+      { ok: false, message: "No autorizado." },
+      { status: 401 },
+    );
   }
 
   try {
-    const { radicado } = await req.json() as { radicado?: string };
+    const { radicado } = (await req.json()) as { radicado?: string };
     if (!radicado) {
-      return NextResponse.json({ ok: false, message: "Radicado requerido." }, { status: 400 });
+      return NextResponse.json(
+        { ok: false, message: "Radicado requerido." },
+        { status: 400 },
+      );
     }
 
     await withPrismaRetry(() =>

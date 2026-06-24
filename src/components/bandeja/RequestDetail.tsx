@@ -31,7 +31,11 @@ export function RequestDetail({ solicitud, activeTab }: RequestDetailProps) {
 
       <div className="flex-1 min-h-0 overflow-auto [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
         {activeTab === "documentos" ? (
-          <DocumentosTab cedula={solicitud.cedula} />
+          <DocumentosTab
+            cedula={solicitud.cedula}
+            solicitante={solicitud.solicitante}
+            radicado={solicitud.radicado}
+          />
         ) : detail ? (
           <>
             {activeTab === "campos" && <ResumenSolicitud solicitud={detail} />}
