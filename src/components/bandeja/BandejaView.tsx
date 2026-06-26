@@ -80,6 +80,7 @@ export function BandejaView({ mode, cedulaFilter }: BandejaViewProps) {
     const [query, setQuery] = useState("");
     const [filtro, setFiltro] = useState<FiltroTab>("todos");
     const [selectedRadicado, setSelectedRadicado] = useState<string | null>(null);
+    const [selectedItem, setSelectedItem] = useState<SolicitudUI | null>(null);
     const [activeTab, setActiveTab] = useState<DetailModalTab>("campos");
     const [page, setPage] = useState(1);
     const [vistaGestionados, setVistaGestionados] = useState(false);
@@ -89,20 +90,33 @@ export function BandejaView({ mode, cedulaFilter }: BandejaViewProps) {
     const [showList, setShowList] = useState(true);
 
     const {
-        data: solicitudes = [],
+        data: pageResult,
         isLoading: loading,
         isFetching: refreshing,
         error: queryError,
         refetch,
     } = useQuery({
-        queryKey: ["solicitudes", cedulaFilter],
+        queryKey: ["solicitudes", cedulaFilter, page, filtro, query, vistaGestionados],
         queryFn: async () => {
-            const r = await bandeja.listSolicitudes({ limit: 500, cedulaFilter });
+            const r = await bandeja.listSolicitudes({
+                limit: PAGE_SIZE,
+                page,
+                cedulaFilter,
+                estado: filtro !== "todos" ? filtro : undefined,
+                q: query || undefined,
+                gestionado: vistaGestionados,
+            });
             if (!r.ok) throw new Error(r.error.message);
             return r.data;
         },
         refetchInterval: 30_000,
     });
+
+    const pageRows = pageResult?.data ?? [];
+    const total = pageResult?.total ?? 0;
+    const totalPages = pageResult?.totalPages ?? 1;
+    const totalActivas = pageResult?.totalActivas ?? 0;
+    const totalGestionadas = pageResult?.totalGestionadas ?? 0;
 
     const {
         data: selectedDetail = null,
@@ -126,6 +140,7 @@ export function BandejaView({ mode, cedulaFilter }: BandejaViewProps) {
         onSuccess: () => {
             qc.invalidateQueries({ queryKey: ["solicitudes", cedulaFilter] });
             setSelectedRadicado(null);
+            setSelectedItem(null);
             setConfirmRadicado(null);
         },
         onError: (e: Error) => {
@@ -153,55 +168,29 @@ export function BandejaView({ mode, cedulaFilter }: BandejaViewProps) {
         gestionarMutation.mutate(confirmRadicado);
     };
 
-    const { totalActivas, totalGestionadas, baseList, conteoPorEstado } = useMemo(() => {
-        let activas = 0;
-        let gestionadas = 0;
-        const base: SolicitudUI[] = [];
-        const conteo = new Map<FiltroTab, number>();
-
-        for (const s of solicitudes) {
-            if (s.gestionado) gestionadas++;
-            else activas++;
-
-            if (vistaGestionados ? s.gestionado : !s.gestionado) {
-                base.push(s);
-                conteo.set(s.estado, (conteo.get(s.estado) ?? 0) + 1);
-            }
+    const conteoPorEstado = useMemo(() => {
+        const map = new Map<FiltroTab, number>();
+        const counts = pageResult?.estadoCounts ?? {};
+        for (const [k, v] of Object.entries(counts)) {
+            map.set(k as FiltroTab, v);
         }
-        conteo.set("todos", base.length);
+        return map;
+    }, [pageResult?.estadoCounts]);
 
-        return { totalActivas: activas, totalGestionadas: gestionadas, baseList: base, conteoPorEstado: conteo };
-    }, [solicitudes, vistaGestionados]);
-
-    const filtradas = useMemo(() => {
-        const q = query.trim().toLowerCase();
-        if (filtro === "todos" && !q) return baseList;
-        return baseList.filter((s) => {
-            if (filtro !== "todos" && s.estado !== filtro) return false;
-            if (q && !s.cedula.includes(q) && !s.solicitante.toLowerCase().includes(q) && !s.radicado.includes(q)) return false;
-            return true;
-        });
-    }, [baseList, filtro, query]);
-
-    const totalPages = Math.max(1, Math.ceil(filtradas.length / PAGE_SIZE));
     const safePage = Math.min(page, totalPages);
     const pageStart = (safePage - 1) * PAGE_SIZE;
-    const pageRows = filtradas.slice(pageStart, pageStart + PAGE_SIZE);
 
-    useEffect(() => { setPage(1); }, [filtro, rawQuery, solicitudes, vistaGestionados]);
-    useEffect(() => { setSelectedRadicado(null); setModalOpen(false); }, [vistaGestionados]);
+    useEffect(() => { setPage(1); }, [filtro, query, vistaGestionados]);
+    useEffect(() => { setSelectedRadicado(null); setSelectedItem(null); setModalOpen(false); }, [vistaGestionados]);
 
-    const seleccionada = useMemo(
-        () => solicitudes.find((s) => s.radicado === selectedRadicado) ?? null,
-        [solicitudes, selectedRadicado],
-    );
+    const seleccionada = selectedItem;
 
     const handleExportCSV = () => {
-        if (filtradas.length === 0) return;
+        if (pageRows.length === 0) return;
         const headers = ["identificacion", "fecha", "radicado", "solicitante", "valor", "estado", "score_cifin", "gestionado"];
         const csv = [
             headers.join(","),
-            ...filtradas.map((s) =>
+            ...pageRows.map((s) =>
                 [s.cedula, s.fecha, s.radicado, `"${s.solicitante.replace(/"/g, '""')}"`, s.valor, ESTADO_LABEL[s.estado], s.score ?? "", s.gestionado ? (s.gestionadoAt ?? "sí") : "no"].join(","),
             ),
         ].join("\n");
@@ -214,10 +203,7 @@ export function BandejaView({ mode, cedulaFilter }: BandejaViewProps) {
         URL.revokeObjectURL(url);
     };
 
-    const confirmSolicitud = useMemo(
-        () => (confirmRadicado ? solicitudes.find((s) => s.radicado === confirmRadicado) ?? null : null),
-        [confirmRadicado, solicitudes],
-    );
+    const confirmSolicitud = confirmRadicado ? selectedItem : null;
 
     return (
         <div className="flex flex-col -m-4 sm:-m-6 lg:-m-8 h-[calc(100%+2rem)] sm:h-[calc(100%+3rem)] lg:h-[calc(100%+4rem)]">
@@ -229,7 +215,7 @@ export function BandejaView({ mode, cedulaFilter }: BandejaViewProps) {
                         {mode === "admin" ? "Bandeja de solicitudes" : "Mis solicitudes"}
                     </h2>
                     <p className="text-[11px] text-[#0D0D0D]/40">
-                        {loading ? "Cargando…" : `${solicitudes.length} solicitudes cargadas`}
+                        {loading ? "Cargando…" : `${total} solicitudes`}
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -410,7 +396,15 @@ export function BandejaView({ mode, cedulaFilter }: BandejaViewProps) {
                                 return (
                                     <button
                                         key={s.radicado}
-                                        onClick={() => setSelectedRadicado(selected ? null : s.radicado)}
+                                        onClick={() => {
+                                            if (selected) {
+                                                setSelectedRadicado(null);
+                                                setSelectedItem(null);
+                                            } else {
+                                                setSelectedRadicado(s.radicado);
+                                                setSelectedItem(s);
+                                            }
+                                        }}
                                         className={`w-full text-left px-4 py-3 border-b border-[#0D0D0D]/5 transition-colors border-l-2 ${selected
                                             ? "bg-[#012340]/[0.05] border-l-[#012340]"
                                             : "border-l-transparent hover:bg-[#0D0D0D]/[0.02]"
@@ -444,10 +438,10 @@ export function BandejaView({ mode, cedulaFilter }: BandejaViewProps) {
                         )}
                     </div>
 
-                    {!loading && filtradas.length > PAGE_SIZE && (
+                    {!loading && total > PAGE_SIZE && (
                         <div className="flex-shrink-0 border-t border-[#0D0D0D]/10 px-3 py-2 flex items-center justify-between">
                             <span className="text-[10px] text-[#0D0D0D]/40">
-                                {pageStart + 1}–{Math.min(pageStart + PAGE_SIZE, filtradas.length)} de {filtradas.length}
+                                {pageStart + 1}–{Math.min(pageStart + PAGE_SIZE, total)} de {total}
                             </span>
                             <div className="flex gap-1">
                                 <button

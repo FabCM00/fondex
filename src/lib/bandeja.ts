@@ -12,23 +12,45 @@ type SafeResult<T> =
 
 export interface ListSolicitudesOptions {
   limit?: number;
+  page?: number;
   cedulaFilter?: string;
+  estado?: string;
+  q?: string;
+  gestionado?: boolean;
+}
+
+export interface SolicitudesPage {
+  data: SolicitudUI[];
+  total: number;
+  totalPages: number;
+  totalActivas: number;
+  totalGestionadas: number;
+  estadoCounts: Record<string, number>;
 }
 
 import type { SolicitudUI } from "./types";
 
 async function listSolicitudes(
   options: ListSolicitudesOptions = {},
-): Promise<SafeResult<SolicitudUI[]>> {
+): Promise<SafeResult<SolicitudesPage>> {
   try {
     const params = new URLSearchParams();
     if (options.limit) params.set("limit", String(options.limit));
+    if (options.page) params.set("page", String(options.page));
     if (options.cedulaFilter) params.set("cedulaFilter", options.cedulaFilter);
+    if (options.estado && options.estado !== "todos") params.set("estado", options.estado);
+    if (options.q) params.set("q", options.q);
+    if (options.gestionado !== undefined) params.set("gestionado", String(options.gestionado));
 
     const res = await fetch(`/api/usuario/bandeja?${params.toString()}`);
     const json = (await res.json()) as {
       ok: boolean;
       data?: SolicitudUI[];
+      total?: number;
+      totalPages?: number;
+      totalActivas?: number;
+      totalGestionadas?: number;
+      estadoCounts?: Record<string, number>;
       message?: string;
     };
 
@@ -39,7 +61,18 @@ async function listSolicitudes(
         error: { message: json.message ?? "Error al cargar solicitudes." },
       };
     }
-    return { ok: true, data: json.data ?? [], error: null };
+    return {
+      ok: true,
+      data: {
+        data: json.data ?? [],
+        total: json.total ?? 0,
+        totalPages: json.totalPages ?? 1,
+        totalActivas: json.totalActivas ?? 0,
+        totalGestionadas: json.totalGestionadas ?? 0,
+        estadoCounts: json.estadoCounts ?? {},
+      },
+      error: null,
+    };
   } catch (err) {
     return {
       ok: false,

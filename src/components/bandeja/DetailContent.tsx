@@ -62,7 +62,6 @@ function calcAntigüedadMeses(fecha: string | null | undefined): string {
     : `${años} año${años !== 1 ? "s" : ""}`;
 }
 
-// ─── Componentes de sección ───────────────────────────────────────────────────
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (

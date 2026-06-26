@@ -220,12 +220,24 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const limit = parseInt(req.nextUrl.searchParams.get("limit") ?? "200");
-  const cedulaFilter =
-    req.nextUrl.searchParams.get("cedulaFilter") ?? undefined;
+  const sp = req.nextUrl.searchParams;
+  const page = Math.max(1, parseInt(sp.get("page") ?? "1"));
+  const limit = Math.max(1, parseInt(sp.get("limit") ?? "20"));
+  const skip = (page - 1) * limit;
+  const estadoParam = sp.get("estado") ?? undefined;
+  const q = sp.get("q")?.trim().toLowerCase() || undefined;
+  const gestionadoParam = sp.get("gestionado") ?? undefined;
+  const cedulaFilter = sp.get("cedulaFilter") ?? undefined;
 
-  const where: { cedula?: string } = {};
+  // DB-level filters: only hard partitions (gestionado + cedulaFilter).
+  // estado and q are derived/JSONB fields — filtered in-memory below.
+  const where: {
+    cedula?: string;
+    gestionadoAt?: null | { not: null };
+  } = {};
   if (cedulaFilter) where.cedula = cedulaFilter;
+  if (gestionadoParam === "true") where.gestionadoAt = { not: null };
+  else if (gestionadoParam === "false") where.gestionadoAt = null;
 
   try {
     const v1Rows = await withPrismaRetry(() =>
@@ -243,7 +255,6 @@ export async function GET(req: NextRequest) {
           creditTracking: { select: { req143: true } },
         },
         orderBy: { createdAt: "desc" },
-        take: limit,
       }),
     );
 
@@ -267,7 +278,7 @@ export async function GET(req: NextRequest) {
     const autoSet = new Set(autoGestionar);
 
     type V1Row = (typeof v1Rows)[number];
-    const data = v1Rows.map((v1: V1Row) => {
+    const allItems = v1Rows.map((v1: V1Row) => {
       const motor = v1.motorProcess ?? null;
       const md = v1.motorData ?? null;
       const iv = v1.identity ?? null;
@@ -306,7 +317,59 @@ export async function GET(req: NextRequest) {
       };
     });
 
-    return NextResponse.json({ ok: true, data });
+    // Compute estado counts before q/estado filters (matches client-side behavior).
+    const estadoCounts: Record<string, number> = { todos: allItems.length };
+    for (const item of allItems) {
+      estadoCounts[item.estado] = (estadoCounts[item.estado] ?? 0) + 1;
+    }
+
+    // Apply text search (cedula, radicado, solicitante — all in memory).
+    let filteredItems = allItems;
+    if (q) {
+      filteredItems = filteredItems.filter(
+        (s) =>
+          s.cedula.includes(q) ||
+          s.solicitante.toLowerCase().includes(q) ||
+          s.radicado.includes(q),
+      );
+    }
+
+    // Apply estado filter.
+    if (estadoParam && estadoParam !== "todos") {
+      filteredItems = filteredItems.filter((s) => s.estado === estadoParam);
+    }
+
+    const total = filteredItems.length;
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+    const data = filteredItems.slice(skip, skip + limit);
+
+    // Global active/managed counts for tab badges (run after auto-gestionar).
+    const [totalActivas, totalGestionadas] = await Promise.all([
+      withPrismaRetry(() =>
+        prisma.valida1Results.count({
+          where: cedulaFilter
+            ? { cedula: cedulaFilter, gestionadoAt: null }
+            : { gestionadoAt: null },
+        }),
+      ),
+      withPrismaRetry(() =>
+        prisma.valida1Results.count({
+          where: cedulaFilter
+            ? { cedula: cedulaFilter, gestionadoAt: { not: null } }
+            : { gestionadoAt: { not: null } },
+        }),
+      ),
+    ]);
+
+    return NextResponse.json({
+      ok: true,
+      data,
+      total,
+      totalPages,
+      totalActivas,
+      totalGestionadas,
+      estadoCounts,
+    });
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : "Error interno.";
     return NextResponse.json({ ok: false, message: msg }, { status: 500 });

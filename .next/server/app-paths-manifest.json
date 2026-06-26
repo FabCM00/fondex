@@ -1,10 +1,7 @@
 {
   "/api/usuario/bandeja/route": "app/api/usuario/bandeja/route.js",
+  "/api/usuario/documentos/route": "app/api/usuario/documentos/route.js",
   "/api/usuario/bandeja/[radicado]/route": "app/api/usuario/bandeja/[radicado]/route.js",
-  "/api/health/route": "app/api/health/route.js",
-  "/login/page": "app/login/page.js",
-  "/(protected)/usuario/perfil/page": "app/(protected)/usuario/perfil/page.js",
-  "/(protected)/admin/perfil/page": "app/(protected)/admin/perfil/page.js",
-  "/(protected)/usuario/bandeja/page": "app/(protected)/usuario/bandeja/page.js",
-  "/(protected)/admin/usuarios/page": "app/(protected)/admin/usuarios/page.js"
+  "/api/auth/[...nextauth]/route": "app/api/auth/[...nextauth]/route.js",
+  "/(protected)/usuario/bandeja/page": "app/(protected)/usuario/bandeja/page.js"
 }
