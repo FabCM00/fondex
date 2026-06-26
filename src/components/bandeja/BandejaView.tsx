@@ -1,7 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { bandeja } from "@/lib/bandeja";
 import type { SolicitudUI, SolicitudEstado } from "@/lib/bandeja";
 import { useAuth } from "@/contexts/AuthContext";
@@ -72,91 +73,86 @@ const COP_FORMATTER = new Intl.NumberFormat("es-CO");
 
 export function BandejaView({ mode, cedulaFilter }: BandejaViewProps) {
     const { user } = useAuth();
-    const [solicitudes, setSolicitudes] = useState<SolicitudUI[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-    const [refreshing, setRefreshing] = useState(false);
+    const qc = useQueryClient();
+
+    const [mutationError, setMutationError] = useState<string | null>(null);
     const [rawQuery, setRawQuery] = useState("");
     const [query, setQuery] = useState("");
     const [filtro, setFiltro] = useState<FiltroTab>("todos");
     const [selectedRadicado, setSelectedRadicado] = useState<string | null>(null);
-    const [selectedDetail, setSelectedDetail] = useState<SolicitudUI | null>(null);
-    const [detailLoading, setDetailLoading] = useState(false);
     const [activeTab, setActiveTab] = useState<DetailModalTab>("campos");
     const [page, setPage] = useState(1);
     const [vistaGestionados, setVistaGestionados] = useState(false);
     const [confirmRadicado, setConfirmRadicado] = useState<string | null>(null);
-    const [gestionando, setGestionando] = useState(false);
     const [modalOpen, setModalOpen] = useState(false);
     const [filtroOpen, setFiltroOpen] = useState(false);
     const [showList, setShowList] = useState(true);
-    const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-    const [autoRefreshSecs, setAutoRefreshSecs] = useState(30);
+
+    const {
+        data: solicitudes = [],
+        isLoading: loading,
+        isFetching: refreshing,
+        error: queryError,
+        refetch,
+    } = useQuery({
+        queryKey: ["solicitudes", cedulaFilter],
+        queryFn: async () => {
+            const r = await bandeja.listSolicitudes({ limit: 500, cedulaFilter });
+            if (!r.ok) throw new Error(r.error.message);
+            return r.data;
+        },
+        refetchInterval: 30_000,
+    });
+
+    const {
+        data: selectedDetail = null,
+        isLoading: detailLoading,
+    } = useQuery({
+        queryKey: ["solicitud", selectedRadicado],
+        queryFn: async () => {
+            const r = await bandeja.getSolicitud(selectedRadicado!);
+            if (!r.ok) throw new Error(r.error.message);
+            return r.data ?? null;
+        },
+        enabled: !!selectedRadicado,
+    });
+
+    const gestionarMutation = useMutation({
+        mutationFn: async (radicado: string) => {
+            const r = await bandeja.marcarGestionado(radicado, user?.email ?? undefined);
+            if (!r.ok) throw new Error(r.error.message);
+            return r;
+        },
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: ["solicitudes", cedulaFilter] });
+            setSelectedRadicado(null);
+            setConfirmRadicado(null);
+        },
+        onError: (e: Error) => {
+            setMutationError(`Error al gestionar: ${e.message}`);
+            setConfirmRadicado(null);
+        },
+    });
+
+    const error = (queryError as Error | null)?.message ?? mutationError;
 
     useEffect(() => {
         const t = setTimeout(() => setQuery(rawQuery), 250);
         return () => clearTimeout(t);
     }, [rawQuery]);
 
-    const fetchData = useCallback(async (clearSelection = false) => {
-        const r = await bandeja.listSolicitudes({ limit: 500, cedulaFilter });
-        if (!r.ok) { setError(r.error.message); setSolicitudes([]); return; }
-        setError(null);
-        setSolicitudes(r.data);
-        setLastUpdated(new Date());
-        setAutoRefreshSecs(30);
-        if (clearSelection) {
-            setSelectedRadicado(null);
-        } else {
-            setSelectedRadicado((cur) => {
-                if (cur && r.data.some((s) => s.radicado === cur)) return cur;
-                return null;
-            });
-        }
-    }, [cedulaFilter]);
+    const handleRefresh = async () => { await refetch(); };
 
-    useEffect(() => {
-        setLoading(true);
-        fetchData().finally(() => setLoading(false));
-    }, [fetchData]);
-
-    // Auto-refresh cada 30 segundos
-    useEffect(() => {
-        if (autoRefreshSecs <= 0) {
-            fetchData();
-            return;
-        }
-        const t = setTimeout(() => setAutoRefreshSecs((n) => n - 1), 1000);
-        return () => clearTimeout(t);
-    }, [autoRefreshSecs, fetchData]);
-
-    useEffect(() => {
-        if (!selectedRadicado) { setSelectedDetail(null); return; }
-        setDetailLoading(true);
-        bandeja.getSolicitud(selectedRadicado)
-            .then((r) => { if (r.ok) setSelectedDetail(r.data); })
-            .finally(() => setDetailLoading(false));
-    }, [selectedRadicado]);
-
-    const handleRefresh = async () => { setRefreshing(true); await fetchData(); setRefreshing(false); };
-
-    // Nº de filtros activos (solo Estado): "todos" no cuenta como filtro
     const filtrosActivos = filtro !== "todos" ? 1 : 0;
     const handleLimpiarFiltros = () => setFiltro("todos");
 
     const handleGestionar = (radicado: string) => setConfirmRadicado(radicado);
 
-    const handleConfirmGestionar = async () => {
+    const handleConfirmGestionar = () => {
         if (!confirmRadicado) return;
-        setGestionando(true);
-        const r = await bandeja.marcarGestionado(confirmRadicado, user?.email ?? undefined);
-        setGestionando(false);
-        setConfirmRadicado(null);
-        if (!r.ok) { setError(`Error al gestionar: ${r.error.message}`); return; }
-        await fetchData(true);
+        gestionarMutation.mutate(confirmRadicado);
     };
 
-    // Un solo scan para: totales + lista base + conteos por estado
     const { totalActivas, totalGestionadas, baseList, conteoPorEstado } = useMemo(() => {
         let activas = 0;
         let gestionadas = 0;
@@ -177,7 +173,6 @@ export function BandejaView({ mode, cedulaFilter }: BandejaViewProps) {
         return { totalActivas: activas, totalGestionadas: gestionadas, baseList: base, conteoPorEstado: conteo };
     }, [solicitudes, vistaGestionados]);
 
-    // Filtrado secundario: estado + búsqueda (sobre baseList ya particionada)
     const filtradas = useMemo(() => {
         const q = query.trim().toLowerCase();
         if (filtro === "todos" && !q) return baseList;
@@ -238,15 +233,6 @@ export function BandejaView({ mode, cedulaFilter }: BandejaViewProps) {
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
-                    {seleccionada && !seleccionada.gestionado && (
-                        <Button
-                            onClick={() => handleGestionar(seleccionada.radicado)}
-                            className="rounded-md bg-[#012340] hover:bg-[#012340]/90 text-white h-7 px-2.5 text-[10px] font-semibold tracking-wide"
-                        >
-                            <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
-                            Marcar como Gestionado
-                        </Button>
-                    )}
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                             <button
@@ -258,8 +244,13 @@ export function BandejaView({ mode, cedulaFilter }: BandejaViewProps) {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent
                             align="end"
-                            className="rounded-md min-w-[170px] data-[state=open]:slide-in-from-top-1"
+                            className="rounded-md min-w-[190px] data-[state=open]:slide-in-from-top-1"
                         >
+                            {seleccionada && !seleccionada.gestionado && (
+                                <DropdownMenuItem onClick={() => handleGestionar(seleccionada.radicado)} className="text-[11px] font-semibold cursor-pointer text-[#012340]">
+                                    <CheckCircle2 className="h-3.5 w-3.5" /> Marcar como Gestionado
+                                </DropdownMenuItem>
+                            )}
                             {seleccionada && (
                                 <DropdownMenuItem onClick={() => setModalOpen(true)} className="text-[11px] font-semibold cursor-pointer">
                                     <Maximize2 className="h-3.5 w-3.5" /> Expandir
@@ -526,7 +517,7 @@ export function BandejaView({ mode, cedulaFilter }: BandejaViewProps) {
             {confirmRadicado && (
                 <div
                     className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-4 duration-200 animate-in fade-in"
-                    onClick={(e) => { if (e.target === e.currentTarget && !gestionando) setConfirmRadicado(null); }}
+                    onClick={(e) => { if (e.target === e.currentTarget && !gestionarMutation.isPending) setConfirmRadicado(null); }}
                 >
                     <div className="w-full max-w-sm border border-l-4 border-[#0D0D0D]/15 border-l-[#012340] bg-white shadow-2xl duration-200 animate-in zoom-in-95">
                         <div className="border-b border-[#0D0D0D]/10 px-5 py-4">
@@ -556,13 +547,13 @@ export function BandejaView({ mode, cedulaFilter }: BandejaViewProps) {
                             <p className="text-xs text-[#0D0D0D]/40">La solicitud pasará a Gestionadas. Esta acción no se puede deshacer.</p>
                         </div>
                         <div className="border-t border-[#0D0D0D]/10 px-5 py-3 flex justify-end gap-2">
-                            <Button variant="outline" onClick={() => setConfirmRadicado(null)} disabled={gestionando}
+                            <Button variant="outline" onClick={() => setConfirmRadicado(null)} disabled={gestionarMutation.isPending}
                                 className="rounded-none border-[#0D0D0D]/15 h-8 px-4 text-[11px] font-semibold">
                                 Cancelar
                             </Button>
-                            <Button onClick={handleConfirmGestionar} disabled={gestionando}
+                            <Button onClick={handleConfirmGestionar} disabled={gestionarMutation.isPending}
                                 className="rounded-none bg-[#012340] hover:bg-[#012340]/90 text-white h-8 px-4 text-[11px] font-semibold">
-                                {gestionando ? "Guardando…" : "Confirmar"}
+                                {gestionarMutation.isPending ? "Guardando…" : "Confirmar"}
                             </Button>
                         </div>
                     </div>

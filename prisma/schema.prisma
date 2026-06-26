@@ -48,6 +48,8 @@ model CreditTracking {
   radicado    String         @id
   cedula      String?
   correo      String?
+  nombre      String?
+  telefono    String?
   numeroFlujo Int?           @map("numero_flujo")
   req135      String?        @map("req_135")
   req143      String?        @map("req_143")

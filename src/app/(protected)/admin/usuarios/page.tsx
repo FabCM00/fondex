@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useProtectedRoute } from "@/hooks/use-protected-route";
 import type { Profile } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -18,12 +19,13 @@ import {
   Clock,
   ToggleLeft,
   ToggleRight,
+  Trash2,
 } from "lucide-react";
 import { LoadingScreen } from "@/components/LoadingScreen";
+import { useNotification } from "@/contexts/NotificationContext";
 
 const PAGE_SIZE = 10;
 
-// Extiende Profile con el campo extra que devuelve /api/auth/users
 type UserRow = Profile & { passwordSet?: boolean };
 
 export default function AdminUsuariosPage() {
@@ -31,40 +33,100 @@ export default function AdminUsuariosPage() {
     allowedRoles: ["admin"],
   });
 
-  const [usersData, setUsersData] = useState<UserRow[]>([]);
-  const [loadingUsers, setLoadingUsers] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const qc = useQueryClient();
+  const { notify, confirm } = useNotification();
+
   const [filterQuery, setFilterQuery] = useState("");
   const [page, setPage] = useState(1);
-
-  const [toggling, setToggling] = useState<Record<string, boolean>>({});
-
-  // Modal de invitación
   const [modalOpen, setModalOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
-  const [inviting, setInviting] = useState(false);
-  const [inviteStatus, setInviteStatus] = useState<{
-    ok: boolean;
-    msg: string;
-  } | null>(null);
 
-  const fetchUsers = useCallback(async () => {
-    const res = await fetch("/api/admin/users");
-    const json = await res.json().catch(() => ({ ok: false, data: [] }));
-    if (json.ok && Array.isArray(json.data)) setUsersData(json.data);
-  }, []);
+  const {
+    data: usersData = [],
+    isLoading: loadingUsers,
+    isFetching: refreshing,
+    refetch,
+  } = useQuery({
+    queryKey: ["admin", "users"],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/users");
+      const json = await res.json().catch(() => ({ ok: false, data: [] }));
+      if (!json.ok) throw new Error("No se pudieron cargar los usuarios.");
+      return json.data as UserRow[];
+    },
+    enabled: isAuthorized,
+  });
 
-  useEffect(() => {
-    if (!isAuthorized) return;
-    setLoadingUsers(true);
-    fetchUsers().finally(() => setLoadingUsers(false));
-  }, [isAuthorized, fetchUsers]);
+  const toggleMutation = useMutation({
+    mutationFn: async ({ id, active }: { id: string; active: boolean }) => {
+      const res = await fetch(`/api/admin/users/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ active }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!json.ok) throw new Error("Error al actualizar el estado.");
+      return { id, active };
+    },
+    onMutate: async ({ id, active }) => {
+      await qc.cancelQueries({ queryKey: ["admin", "users"] });
+      const prev = qc.getQueryData<UserRow[]>(["admin", "users"]);
+      qc.setQueryData<UserRow[]>(["admin", "users"], (old = []) =>
+        old.map((u) => (u.id === id ? { ...u, estado: active } : u)),
+      );
+      return { prev };
+    },
+    onError: (e: Error, _, ctx) => {
+      if (ctx?.prev) qc.setQueryData(["admin", "users"], ctx.prev);
+      notify({ type: "error", message: e.message });
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "users"] });
+    },
+  });
 
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    await fetchUsers();
-    setRefreshing(false);
-  };
+  const inviteMutation = useMutation({
+    mutationFn: async (email: string) => {
+      const res = await fetch("/api/auth/invite-user", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.ok) {
+        throw new Error(json?.message ?? "Error al invitar.");
+      }
+      return json as { message?: string };
+    },
+    onSuccess: (json, email) => {
+      notify({ type: "success", message: json.message ?? `Invitación enviada a ${email}` });
+      setInviteEmail("");
+      setModalOpen(false);
+      qc.invalidateQueries({ queryKey: ["admin", "users"] });
+    },
+    onError: (e: Error) => {
+      notify({ type: "error", message: e.message });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/admin/users/${id}`, { method: "DELETE" });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.ok)
+        throw new Error(json?.message ?? "Error al eliminar.");
+      return id;
+    },
+    onSuccess: (id) => {
+      qc.setQueryData<UserRow[]>(["admin", "users"], (old = []) =>
+        old.filter((u) => u.id !== id),
+      );
+      notify({ type: "success", message: "Usuario eliminado correctamente." });
+    },
+    onError: (e: Error) => {
+      notify({ type: "error", message: e.message });
+    },
+  });
 
   const filtered = useMemo(() => {
     if (!filterQuery.trim()) return usersData;
@@ -99,68 +161,33 @@ export default function AdminUsuariosPage() {
     return { total, activos, pendientes, inactivos };
   }, [usersData]);
 
-  const handleToggleActivo = async (user: UserRow) => {
-    const nuevoEstado = !user.estado;
-    setToggling((prev) => ({ ...prev, [user.id]: true }));
+  const handleRefresh = () => refetch();
 
-    try {
-      const res = await fetch(`/api/admin/users/${user.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ active: nuevoEstado }),
-      });
-      const json = await res.json().catch(() => ({}));
+  const handleToggleActivo = (user: UserRow) => {
+    toggleMutation.mutate({ id: user.id, active: !user.estado });
+  };
 
-      if (json.ok) {
-        setUsersData((prev) =>
-          prev.map((u) =>
-            u.id === user.id ? { ...u, estado: nuevoEstado } : u,
-          ),
-        );
-      }
-    } finally {
-      setToggling((prev) => ({ ...prev, [user.id]: false }));
-    }
+  const handleInvite = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    inviteMutation.mutate(inviteEmail);
+  };
+
+  const handleDelete = async (user: UserRow) => {
+    const ok = await confirm({
+      type: "warning",
+      title: "Eliminar usuario",
+      message: `¿Confirmas que deseas eliminar a ${user.username || user.email} permanentemente? Esta acción no se puede deshacer.`,
+      confirmLabel: "Eliminar",
+      cancelLabel: "Cancelar",
+      confirmTone: "danger",
+    });
+    if (!ok) return;
+    deleteMutation.mutate(user.id);
   };
 
   if (authLoading)
     return <LoadingScreen message="Cargando módulo de usuarios..." />;
   if (!isAuthorized) return null;
-
-  const handleInvite = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setInviting(true);
-    setInviteStatus(null);
-
-    try {
-      const res = await fetch("/api/auth/invite-user", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: inviteEmail }),
-      });
-
-      const json = await res.json().catch(() => ({}));
-
-      if (!res.ok || !json.ok) {
-        throw new Error(json?.message ?? "Error al invitar.");
-      }
-
-      setInviteStatus({
-        ok: true,
-        msg: json.message ?? `Invitación enviada a ${inviteEmail}`,
-      });
-      setInviteEmail("");
-      setTimeout(() => fetchUsers(), 1000);
-    } catch (err: unknown) {
-      setInviteStatus({
-        ok: false,
-        msg:
-          err instanceof Error ? err.message : "Error al enviar la invitación.",
-      });
-    } finally {
-      setInviting(false);
-    }
-  };
 
   return (
     <div className="flex flex-col gap-6">
@@ -219,7 +246,6 @@ export default function AdminUsuariosPage() {
           <Button
             onClick={() => {
               setModalOpen(true);
-              setInviteStatus(null);
               setInviteEmail("");
             }}
             className="rounded-none bg-[#012340] hover:bg-[#012340]/90 text-white h-10 px-4 text-xs font-bold tracking-widest"
@@ -284,80 +310,90 @@ export default function AdminUsuariosPage() {
                   </td>
                 </tr>
               ) : (
-                pageRows.map((user) => (
-                  <tr
-                    key={user.id}
-                    className="border-b border-[#0D0D0D]/5 hover:bg-black/[0.015] transition-colors"
-                  >
-                    <td className="py-4 px-4 text-center text-[#0D0D0D] font-medium">
-                      {user.username || "—"}
-                    </td>
-                    <td className="py-4 px-4 text-center text-[#0D0D0D]/70 truncate">
-                      {user.email || "—"}
-                    </td>
-                    <td className="py-4 px-4 text-center text-[#0D0D0D]/80">
-                      {user.role === "admin" ? "Administrador" : "Usuario"}
-                    </td>
-                    <td className="py-4 px-4 text-center">
-                      {(() => {
-                        // active=true → Activo
-                        // active=false + sin contraseña → Pendiente (invite no aceptada)
-                        // active=false + con contraseña → Inactivo (desactivado por admin)
-                        const label = user.estado
-                          ? "Activo"
-                          : user.passwordSet === false
-                            ? "Pendiente"
-                            : "Inactivo";
-                        const dot = user.estado
-                          ? "bg-green-500"
-                          : user.passwordSet === false
-                            ? "bg-amber-400"
-                            : "bg-red-500";
-                        const text = user.estado
-                          ? "text-[#0D0D0D]"
-                          : user.passwordSet === false
-                            ? "text-amber-600"
-                            : "text-red-600";
-                        return (
-                          <span className="inline-flex items-center gap-2 text-xs">
-                            <span
-                              className={`h-1.5 w-1.5 rounded-full ${dot}`}
-                            />
-                            <span className={text}>{label}</span>
-                          </span>
-                        );
-                      })()}
-                    </td>
-                    <td className="py-4 px-4 text-center text-[#0D0D0D]/70">
-                      {user.created_at
-                        ? new Date(user.created_at).toLocaleDateString("es-CO")
-                        : "—"}
-                    </td>
-                    <td className="py-4 px-4 text-center">
-                      <button
-                        onClick={() => handleToggleActivo(user)}
-                        disabled={toggling[user.id]}
-                        title={
-                          user.estado ? "Desactivar usuario" : "Activar usuario"
-                        }
-                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold tracking-widest uppercase border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                          user.estado
-                            ? "border-red-200 text-red-600 hover:bg-red-50"
-                            : "border-green-200 text-green-700 hover:bg-green-50"
-                        }`}
-                      >
-                        {toggling[user.id] ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : user.estado ? (
-                          <ToggleLeft className="h-3.5 w-3.5" />
-                        ) : (
-                          <ToggleRight className="h-3.5 w-3.5" />
-                        )}
-                        {user.estado ? "Desactivar" : "Activar"}
-                      </button>
-                    </td>
-                  </tr>
-                ))
+                pageRows.map((user) => {
+                  const isToggling =
+                    toggleMutation.isPending &&
+                    toggleMutation.variables?.id === user.id;
+                  return (
+                    <tr
+                      key={user.id}
+                      className="border-b border-[#0D0D0D]/5 hover:bg-black/[0.015] transition-colors"
+                    >
+                      <td className="py-4 px-4 text-center text-[#0D0D0D] font-medium">
+                        {user.username || "—"}
+                      </td>
+                      <td className="py-4 px-4 text-center text-[#0D0D0D]/70 truncate">
+                        {user.email || "—"}
+                      </td>
+                      <td className="py-4 px-4 text-center text-[#0D0D0D]/80">
+                        {user.role === "admin" ? "Administrador" : "Usuario"}
+                      </td>
+                      <td className="py-4 px-4 text-center">
+                        {(() => {
+                          const label = user.estado
+                            ? "Activo"
+                            : user.passwordSet === false
+                              ? "Pendiente"
+                              : "Inactivo";
+                          const dot = user.estado
+                            ? "bg-green-500"
+                            : user.passwordSet === false
+                              ? "bg-amber-400"
+                              : "bg-red-500";
+                          const text = user.estado
+                            ? "text-[#0D0D0D]"
+                            : user.passwordSet === false
+                              ? "text-amber-600"
+                              : "text-red-600";
+                          return (
+                            <span className="inline-flex items-center gap-2 text-xs">
+                              <span
+                                className={`h-1.5 w-1.5 rounded-full ${dot}`}
+                              />
+                              <span className={text}>{label}</span>
+                            </span>
+                          );
+                        })()}
+                      </td>
+                      <td className="py-4 px-4 text-center text-[#0D0D0D]/70">
+                        {user.created_at
+                          ? new Date(user.created_at).toLocaleDateString(
+                            "es-CO",
+                          )
+                          : "—"}
+                      </td>
+                      <td className="py-4 px-4 text-center">
+                        <div className="inline-flex items-center gap-2 justify-center">
+                          <button
+                            onClick={() => handleToggleActivo(user)}
+                            disabled={isToggling}
+                            title={user.estado ? "Desactivar usuario" : "Activar usuario"}
+                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold tracking-widest uppercase border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${user.estado
+                              ? "border-red-200 text-red-600 hover:bg-red-50"
+                              : "border-green-200 text-green-700 hover:bg-green-50"
+                              }`}
+                          >
+                            {isToggling ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : user.estado ? (
+                              <ToggleLeft className="h-3.5 w-3.5" />
+                            ) : (
+                              <ToggleRight className="h-3.5 w-3.5" />
+                            )}
+                            {user.estado ? "Desactivar" : "Activar"}
+                          </button>
+                          <button
+                            onClick={() => handleDelete(user)}
+                            title="Eliminar usuario"
+                            className="inline-flex items-center justify-center h-[30px] w-[30px] border border-[#0D0D0D]/15 text-[#0D0D0D]/40 hover:border-red-300 hover:text-red-600 hover:bg-red-50 transition-colors"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -409,14 +445,6 @@ export default function AdminUsuariosPage() {
                 />
               </div>
 
-              {inviteStatus && (
-                <p
-                  className={`text-sm font-medium ${inviteStatus.ok ? "text-green-700" : "text-red-600"}`}
-                >
-                  {inviteStatus.msg}
-                </p>
-              )}
-
               <div className="flex justify-end gap-3 pt-2">
                 <Button
                   type="button"
@@ -428,10 +456,10 @@ export default function AdminUsuariosPage() {
                 </Button>
                 <Button
                   type="submit"
-                  disabled={inviting}
+                  disabled={inviteMutation.isPending}
                   className="rounded-none bg-[#012340] hover:bg-[#012340]/90 text-white px-8 tracking-widest text-xs font-bold"
                 >
-                  {inviting ? (
+                  {inviteMutation.isPending ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />{" "}
                       Enviando...
@@ -445,11 +473,11 @@ export default function AdminUsuariosPage() {
           </div>
         </div>
       )}
+
     </div>
   );
 }
 
-// ─── Subcomponentes ───────────────────────────────────────────────────────────
 
 import type { LucideIcon } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -529,11 +557,10 @@ function Paginator({
             <button
               key={item}
               onClick={() => onChange(item)}
-              className={`inline-flex items-center justify-center h-8 min-w-[32px] px-2 text-xs font-medium border transition-colors ${
-                item === page
-                  ? "bg-[#012340] text-white border-[#012340]"
-                  : "bg-white text-[#0D0D0D]/70 border-[#0D0D0D]/15 hover:border-[#012340] hover:text-[#012340]"
-              }`}
+              className={`inline-flex items-center justify-center h-8 min-w-[32px] px-2 text-xs font-medium border transition-colors ${item === page
+                ? "bg-[#012340] text-white border-[#012340]"
+                : "bg-white text-[#0D0D0D]/70 border-[#0D0D0D]/15 hover:border-[#012340] hover:text-[#012340]"
+                }`}
             >
               {item}
             </button>

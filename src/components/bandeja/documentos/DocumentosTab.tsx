@@ -174,7 +174,10 @@ export function DocumentosTab({
                 onClick={openModal}
                 className="font-medium text-[#012340] underline underline-offset-2 transition-colors hover:text-[#012340]/75"
               >
+              <a className="text-blue-600 underline" href="#" onClick={openModal}>
                 cárgalo aquí
+              </a>
+            
               </button>
               .
             </p>

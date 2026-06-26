@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { BlobServiceClient, ContainerClient } from "@azure/storage-blob";
+import { DefaultAzureCredential } from "@azure/identity";
 
 const CONTAINER_NAME = "documentos";
 
@@ -14,31 +15,26 @@ export const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024; // 10 MB
 export const DOCUMENT_STATUSES = ["pendiente", "revision", "validado"] as const;
 export type DocumentoEstado = (typeof DOCUMENT_STATUSES)[number];
 
-/**
- * La categoría (tipo de crédito) es texto libre: además de las predefinidas, el
- * usuario puede escribir la suya. Se guarda como etiqueta legible.
- */
 export const DEFAULT_CATEGORY = "Documentos generales";
 const MAX_CATEGORY_LEN = 60;
 
-/** Mapeo de los slugs antiguos a su etiqueta (compatibilidad con docs previos). */
 const LEGACY_CATEGORY_LABELS: Record<string, string> = {
   vivienda: "Crédito Vivienda",
   vehiculo: "Crédito Vehículo",
   general: DEFAULT_CATEGORY,
 };
 
-/** Limpia/recorta la etiqueta de categoría escrita por el usuario. */
 function sanitizeCategory(value: string | null | undefined): string {
   const v = (value ?? "").trim().replace(/\s+/g, " ");
   return v ? v.slice(0, MAX_CATEGORY_LEN) : DEFAULT_CATEGORY;
 }
 
-/** Resuelve la etiqueta de categoría desde la metadata del blob. */
 function readCategory(meta: Record<string, string>): string {
   if (meta.categoryname) return decodeName(meta.categoryname, DEFAULT_CATEGORY);
   if (meta.category)
-    return LEGACY_CATEGORY_LABELS[meta.category] ?? sanitizeCategory(meta.category);
+    return (
+      LEGACY_CATEGORY_LABELS[meta.category] ?? sanitizeCategory(meta.category)
+    );
   return DEFAULT_CATEGORY;
 }
 
@@ -51,21 +47,15 @@ function normalizeStatus(value: string | null | undefined): DocumentoEstado {
 }
 
 export interface DocumentoMeta {
-  /** Nombre del blob, incluye el prefijo de la cédula (p.ej. "123/uuid-archivo.pdf"). */
   id: string;
-  /** Nombre original del archivo subido por el usuario. */
   name: string;
   size: number;
   contentType: string;
-  /** ISO 8601. */
   uploadedAt: string;
-  /** Tipo de crédito (carpeta en la bandeja). Texto libre. */
   category: string;
-  /** Estado de validación. */
   status: DocumentoEstado;
 }
 
-// Singleton: evita múltiples clientes con el Hot Reload de Next.js.
 const globalForBlob = globalThis as unknown as {
   blobContainer: ContainerClient | undefined;
 };
@@ -73,29 +63,25 @@ const globalForBlob = globalThis as unknown as {
 function getContainerClient(): ContainerClient {
   if (globalForBlob.blobContainer) return globalForBlob.blobContainer;
 
-  const connectionString = process.env.AZURE_BLOB_CONNECTION_STRING;
-  if (!connectionString) {
-    throw new Error("AZURE_BLOB_CONNECTION_STRING no está configurada.");
-  }
+  const accountName = process.env.AZURE_BLOB_ACCOUNT ?? "fondexblobstore";
+  const accountUrl = `https://${accountName}.blob.core.windows.net`;
+  const credential = new DefaultAzureCredential();
 
-  const service = BlobServiceClient.fromConnectionString(connectionString);
+  const service = new BlobServiceClient(accountUrl, credential);
   const container = service.getContainerClient(CONTAINER_NAME);
   globalForBlob.blobContainer = container;
   return container;
 }
 
-/** La cédula solo debe contener dígitos: evita inyección de path en el prefijo del blob. */
 export function sanitizeCedula(cedula: string): string {
   return cedula.replace(/[^0-9]/g, "");
 }
 
 function sanitizeFilename(name: string): string {
-  // Conserva extensión y caracteres seguros; recorta a 120 chars.
   const safe = name.replace(/[^a-zA-Z0-9._-]/g, "_");
   return safe.slice(-120) || "archivo";
 }
 
-// La metadata de Azure solo admite ASCII; el nombre original puede traer acentos/espacios.
 function encodeName(name: string): string {
   return Buffer.from(name, "utf-8").toString("base64");
 }
@@ -162,8 +148,6 @@ export async function uploadDocument(
   const buffer = Buffer.from(await file.arrayBuffer());
   await blockBlob.uploadData(buffer, {
     blobHTTPHeaders: { blobContentType: contentType },
-    // categoryname va en base64: la metadata de Azure solo admite ASCII y la
-    // etiqueta puede traer acentos/espacios (p. ej. "Crédito Educativo").
     metadata: {
       originalname: encodeName(file.name),
       categoryname: encodeName(label),
@@ -182,11 +166,6 @@ export async function uploadDocument(
   };
 }
 
-/**
- * Cambia el estado de validación de un documento. `setMetadata` reemplaza toda
- * la metadata, así que primero leemos la actual y la fusionamos para conservar
- * el nombre original y la categoría.
- */
 export async function setDocumentStatus(
   cedula: string,
   id: string,
@@ -206,10 +185,12 @@ export async function setDocumentStatus(
   await blob.setMetadata({ ...(props.metadata ?? {}), status });
 }
 
-export async function deleteDocument(cedula: string, id: string): Promise<void> {
+export async function deleteDocument(
+  cedula: string,
+  id: string,
+): Promise<void> {
   const safe = sanitizeCedula(cedula);
   if (!safe) throw new Error("Cédula inválida.");
-  // Seguridad: el blob debe pertenecer al prefijo de esta cédula.
   if (!id.startsWith(`${safe}/`)) {
     throw new Error("El documento no pertenece a la cédula indicada.");
   }

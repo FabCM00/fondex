@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
-
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { API, type DocStatus, type Documento } from "./utils";
 
 export interface UseDocumentos {
@@ -13,57 +12,35 @@ export interface UseDocumentos {
   updateStatus: (doc: Documento, status: DocStatus) => Promise<void>;
 }
 
-/**
- * Maneja el ciclo de vida de los documentos de una cédula: carga inicial,
- * recarga y eliminación (con confirmación). Devuelve estado + acciones; el
- * componente solo se encarga de pintarlos.
- */
+async function fetchDocumentos(cedula: string): Promise<Documento[]> {
+  const res = await fetch(`${API}?cedula=${encodeURIComponent(cedula)}`);
+  const json = (await res.json()) as {
+    ok?: boolean;
+    message?: string;
+    documentos?: Documento[];
+  };
+  if (!res.ok || !json.ok) {
+    throw new Error(json.message ?? "No se pudieron cargar los documentos.");
+  }
+  return json.documentos ?? [];
+}
+
 export function useDocumentos(cedula: string): UseDocumentos {
-  const [docs, setDocs] = useState<Documento[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const qc = useQueryClient();
+  const key = ["documentos", cedula] as const;
 
-  const load = useCallback(
-    async (silent: boolean) => {
-      if (!silent) setLoading(true);
-      setError(null);
-      try {
-        const res = await fetch(`${API}?cedula=${encodeURIComponent(cedula)}`);
-        const json = (await res.json()) as {
-          ok?: boolean;
-          message?: string;
-          documentos?: Documento[];
-        };
-        if (!res.ok || !json.ok) {
-          throw new Error(
-            json.message ?? "No se pudieron cargar los documentos.",
-          );
-        }
-        setDocs(json.documentos ?? []);
-      } catch (e) {
-        // En refresco silencioso no rompemos la vista con la pantalla de error:
-        // la subida ya fue exitosa y el documento aparecerá en la próxima recarga.
-        if (!silent) {
-          setError(e instanceof Error ? e.message : "Error al cargar documentos.");
-        }
-      } finally {
-        if (!silent) setLoading(false);
-      }
-    },
-    [cedula],
-  );
+  const {
+    data: docs = [],
+    isLoading: loading,
+    error: queryError,
+    refetch: tqRefetch,
+  } = useQuery({
+    queryKey: key,
+    queryFn: () => fetchDocumentos(cedula),
+  });
 
-  const refetch = useCallback(() => load(false), [load]);
-  const refresh = useCallback(() => load(true), [load]);
-
-  useEffect(() => {
-    load(false);
-  }, [load]);
-
-  // Elimina el documento y lo quita de la lista. Lanza el error para que la UI
-  // (modal de confirmación + notificación) decida cómo mostrarlo.
-  const remove = useCallback(
-    async (doc: Documento) => {
+  const removeMutation = useMutation({
+    mutationFn: async (doc: Documento) => {
       const res = await fetch(
         `${API}?cedula=${encodeURIComponent(cedula)}&id=${encodeURIComponent(doc.id)}`,
         { method: "DELETE" },
@@ -72,15 +49,18 @@ export function useDocumentos(cedula: string): UseDocumentos {
       if (!res.ok || !json.ok) {
         throw new Error(json.message ?? "No se pudo eliminar el documento.");
       }
-      setDocs((prev) => prev.filter((d) => d.id !== doc.id));
     },
-    [cedula],
-  );
+    onSuccess: () => qc.invalidateQueries({ queryKey: key }),
+  });
 
-  // Cambia el estado de validación. Actualiza la lista en el acto; lanza el
-  // error para que la UI lo notifique.
-  const updateStatus = useCallback(
-    async (doc: Documento, status: DocStatus) => {
+  const updateStatusMutation = useMutation({
+    mutationFn: async ({
+      doc,
+      status,
+    }: {
+      doc: Documento;
+      status: DocStatus;
+    }) => {
       const res = await fetch(
         `${API}?cedula=${encodeURIComponent(cedula)}&id=${encodeURIComponent(doc.id)}`,
         {
@@ -93,12 +73,22 @@ export function useDocumentos(cedula: string): UseDocumentos {
       if (!res.ok || !json.ok) {
         throw new Error(json.message ?? "No se pudo actualizar el estado.");
       }
-      setDocs((prev) =>
-        prev.map((d) => (d.id === doc.id ? { ...d, status } : d)),
-      );
     },
-    [cedula],
-  );
+    onSuccess: () => qc.invalidateQueries({ queryKey: key }),
+  });
 
-  return { docs, loading, error, refetch, refresh, remove, updateStatus };
+  const refetch = async () => {
+    await tqRefetch();
+  };
+
+  return {
+    docs,
+    loading,
+    error: queryError instanceof Error ? queryError.message : null,
+    refetch,
+    refresh: refetch,
+    remove: (doc) => removeMutation.mutateAsync(doc),
+    updateStatus: (doc, status) =>
+      updateStatusMutation.mutateAsync({ doc, status }),
+  };
 }
